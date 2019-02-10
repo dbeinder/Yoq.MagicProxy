@@ -2,11 +2,11 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-[assembly: AssemblyTitle("MagicProxy.Test")]
+[assembly: AssemblyTitle("Yoq.MagicProxy.Test")]
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("MagicProxy.Test")]
+[assembly: AssemblyProduct("Yoq.MagicProxy.Test")]
 [assembly: AssemblyCopyright("Copyright © David Beinder 2019")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
