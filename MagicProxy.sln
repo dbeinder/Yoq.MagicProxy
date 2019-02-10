@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.28307.168
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Yoq.MagicProxy", "Yoq.MagicProxy\Yoq.MagicProxy.csproj", "{EEF1318C-5235-4D44-A620-12D986A984DE}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Yoq.MagicProxy.Test", "Yoq.MagicProxy.Test\Yoq.MagicProxy.Test.csproj", "{C6125E69-27B8-4E9F-8CF5-45352AE59235}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{EEF1318C-5235-4D44-A620-12D986A984DE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EEF1318C-5235-4D44-A620-12D986A984DE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EEF1318C-5235-4D44-A620-12D986A984DE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EEF1318C-5235-4D44-A620-12D986A984DE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C6125E69-27B8-4E9F-8CF5-45352AE59235}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C6125E69-27B8-4E9F-8CF5-45352AE59235}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C6125E69-27B8-4E9F-8CF5-45352AE59235}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C6125E69-27B8-4E9F-8CF5-45352AE59235}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {DD4E4825-B15E-4901-8A19-A201D74ADCB4}
+	EndGlobalSection
+EndGlobal
