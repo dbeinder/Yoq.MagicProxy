@@ -31,12 +31,6 @@ namespace Yoq.MagicProxy
             return Task.CompletedTask;
         }
 
-        public override Task LogoutAsync()
-        {
-            Authenticated = false;
-            return Task.CompletedTask;
-        }
-
         protected override Task<(string, byte[])> DoRequest(string request, bool publicRequest) =>
             RunQuerySequentially(async () =>
             {

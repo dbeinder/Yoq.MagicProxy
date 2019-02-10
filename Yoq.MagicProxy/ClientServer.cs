@@ -95,7 +95,7 @@ namespace Yoq.MagicProxy
                     switch (clientInfo.ServerAction)
                     {
                         case ServerAction.None: break;
-                        case ServerAction.Logout: authenticated = false; break;
+                        //case ServerAction.Logout: authenticated = false; break;
                         default: throw new Exception($"unknown server action: [{clientInfo.ServerAction}]");
                     }
 
@@ -121,6 +121,10 @@ namespace Yoq.MagicProxy
                                 case MagicMethodType.Authenticate:
                                     if (res is bool b) authenticated = b;
                                     else Console.WriteLine($"Authenticate method returned: [{res}]");
+                                    break;
+                                case MagicMethodType.CancelAuthentication:
+                                    if (res is bool doCancel && doCancel) authenticated = false;
+                                    else Console.WriteLine($"CancelAuthentication method returned: [{res}]");
                                     break;
                             }
 
@@ -220,8 +224,6 @@ namespace Yoq.MagicProxy
 
         public abstract Task DisconnectAsync();
 
-        public abstract Task LogoutAsync();
-
         protected abstract Task<(string, byte[])> DoRequest(string request, bool publicRequest);
     }
 
@@ -270,8 +272,6 @@ namespace Yoq.MagicProxy
             Connected = false;
         }
 
-        public override Task LogoutAsync() => QueryServerSafely(new MessageInfo { ServerAction = ServerAction.Logout }, null);
-
         private Task<(bool, MessageInfo, byte[], byte[])> QueryServerSafely(MessageInfo info, byte[] reqBytes) =>
             RunQuerySequentially(async () =>
             {
@@ -284,6 +284,11 @@ namespace Yoq.MagicProxy
         private void HandleServerResponse(MessageInfo srvInfo)
         {
             Authenticated = (srvInfo.ServerFlags & ServerFlags.IsAuthenticated) > 0;
+            switch (srvInfo.ClientAction)
+            {
+                case ClientAction.None: break;
+                default: throw new Exception($"unknown server action: [{srvInfo.ClientAction}]");
+            }
         }
 
         protected override async Task<(string, byte[])> DoRequest(string request, bool publicRequest)

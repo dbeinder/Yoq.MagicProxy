@@ -12,7 +12,6 @@ namespace Yoq.MagicProxy
         bool Busy { get; }
         bool Connected { get; }
         bool Authenticated { get; }
-        Task LogoutAsync();
         Task ConnectAsync();
         Task DisconnectAsync();
     }
@@ -31,7 +30,8 @@ namespace Yoq.MagicProxy
     public enum MagicMethodType
     {
         Normal,
-        Authenticate
+        Authenticate,
+        CancelAuthentication
     }
 
     public class MagicMethodAttribute : Attribute

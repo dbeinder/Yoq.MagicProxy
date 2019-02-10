@@ -52,7 +52,7 @@ namespace Yoq.MagicProxy.Test
             var auth = proxy.Authenticated;
             var success = proxy.PublicProxy.Authenticate("foo", "bar").Result;
             auth = proxy.Authenticated;
-            proxy.LogoutAsync().Wait();
+            proxy.AuthenticatedProxy.Logout().Wait();
             auth = proxy.Authenticated;
             success = proxy.PublicProxy.Authenticate("foo", "bar").Result;
             auth = proxy.Authenticated;

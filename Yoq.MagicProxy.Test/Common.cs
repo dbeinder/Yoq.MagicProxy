@@ -22,6 +22,9 @@ namespace Yoq.MagicProxy.Test
         Task Update<T>(T data);
         Task<T> GetFromDb<T>(int y) where T : new();
         Task<List<T>> Nested<T>() where T : new();
+
+        [MagicMethod(MagicMethodType.CancelAuthentication)]
+        Task<bool> Logout();
     }
     
     public class LolClass { public string Member = "FooBar"; }
@@ -42,6 +45,7 @@ namespace Yoq.MagicProxy.Test
         public Task Update<T>(T data) => RequestGeneric<T>(Params(data));
         public Task<T> GetFromDb<T>(int y) where T : new() => RequestGeneric<T, T>(Params(y));
         public Task<List<T>> Nested<T>() where T : new() => RequestGeneric<T, List<T>>(NoParams);
+        public Task<bool> Logout() => Request<bool>(NoParams);
     }
 
     public class FullBackendImpl : ISecuredBackend, IPublicBackend
@@ -65,5 +69,6 @@ namespace Yoq.MagicProxy.Test
         public Task<List<T>> Nested<T>() where T : new() => Task.FromResult(new List<T>() { new T(), new T() });
 
         public Task<bool> Authenticate(string user, string password) => Task.FromResult(user == "foo" && password == "bar");
+        public Task<bool> Logout() => Task.FromResult(true);
     }
 }

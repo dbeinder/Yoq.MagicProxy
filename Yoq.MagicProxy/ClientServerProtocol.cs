@@ -24,8 +24,7 @@ namespace Yoq.MagicProxy
 
     internal enum ServerAction : byte
     {
-        None = 0x00,
-        Logout = 0x01
+        None = 0x00
     }
 
     internal enum ClientAction : byte
