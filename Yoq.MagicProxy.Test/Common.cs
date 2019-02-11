@@ -18,7 +18,7 @@ namespace Yoq.MagicProxy.Test
         Task SimpleThrows();
         Task DoBar(int x);
         Task<double> Foo(int x);
-        Task<byte[]> GetRaw();
+        Task<byte[]> GetRaw(int count);
         Task Update<T>(T data);
         Task<T> GetFromDb<T>(int y) where T : new();
         Task<List<T>> Nested<T>() where T : new();
@@ -26,7 +26,7 @@ namespace Yoq.MagicProxy.Test
         [MagicMethod(MagicMethodType.CancelAuthentication)]
         Task<bool> Logout();
     }
-    
+
     public class LolClass { public string Member = "FooBar"; }
     public class LolDerived : LolClass { public string AddlMember = "FFFXX"; }
 
@@ -41,7 +41,7 @@ namespace Yoq.MagicProxy.Test
         public Task SimpleThrows() => Request(NoParams);
         public Task DoBar(int x) => Request(Params(x));
         public Task<double> Foo(int x) => Request<double>(Params(x));
-        public Task<byte[]> GetRaw() => Request<byte[]>(NoParams);
+        public Task<byte[]> GetRaw(int count) => Request<byte[]>(Params(count));
         public Task Update<T>(T data) => RequestGeneric<T>(Params(data));
         public Task<T> GetFromDb<T>(int y) where T : new() => RequestGeneric<T, T>(Params(y));
         public Task<List<T>> Nested<T>() where T : new() => RequestGeneric<T, List<T>>(NoParams);
@@ -62,7 +62,13 @@ namespace Yoq.MagicProxy.Test
                 return Task.FromResult(Count++ * x * 277.2);
         }
 
-        public Task<byte[]> GetRaw() => Task.FromResult(new byte[] {0x11, 0x22, 0x33});
+        public Task<byte[]> GetRaw(int count)
+        {
+            var buffer = new byte[count];
+            if (count > 0) buffer[0] = 0x55;
+            if (count > 1) buffer[count - 1] = 0x66;
+            return Task.FromResult(buffer);
+        }
 
         public Task Update<T>(T data) => Task.CompletedTask;
         public Task<T> GetFromDb<T>(int y) where T : new() => Task.FromResult(new T());

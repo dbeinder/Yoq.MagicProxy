@@ -102,7 +102,7 @@ namespace Yoq.MagicProxy
                     var errData = new byte[0];
                     var responseData = new byte[0];
 
-                    if (reqBytes?.Length > 0)
+                    if (reqBytes.Length > 0)
                     {
                         var request = Encoding.UTF8.GetString(reqBytes);
 
@@ -299,7 +299,7 @@ namespace Yoq.MagicProxy
 
             var (success, _, err, resp) = await QueryServerSafely(info, requestBytes).ConfigureAwait(false);
             if (!success) throw new Exception("No response from server");
-            var errString = err?.Length > 0 ? Encoding.UTF8.GetString(err) : null;
+            var errString = err.Length > 0 ? Encoding.UTF8.GetString(err) : null;
             return (errString, resp);
         }
 

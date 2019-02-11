@@ -16,7 +16,7 @@ namespace Yoq.MagicProxy.Test
     public class ServerClientTest
     {
         private static int _port = 8085;
-        
+
         /* https://www.samltool.com/self_signed_certs.php
          * λ openssl pkcs12 -export -in cert.txt -inkey pk.txt -out mycert.pfx
                 Enter Export Password:
@@ -61,7 +61,10 @@ namespace Yoq.MagicProxy.Test
             secureProxy.SimpleAction().Wait();
             secureProxy.DoBar(11).Wait();
             var ret = secureProxy.Foo(42).Result;
-            var raw = secureProxy.GetRaw().Result;
+
+            var raw = secureProxy.GetRaw(0x5000).Result;
+            Assert.AreEqual(raw[0], 0x55);
+            Assert.AreEqual(raw[0x4FFF], 0x66);
             var aa = secureProxy.GetFromDb<Guid>(123).Result;
             var bb = secureProxy.GetFromDb<LolClass>(123).Result;
             bb.Member = "aBC";
@@ -82,6 +85,12 @@ namespace Yoq.MagicProxy.Test
 
             Console.WriteLine(impl.Count);
             impl.Count = 0;
+
+
+            sw.Restart();
+            for (var n = 10; n > 0; n--) secureProxy.GetRaw(10 * 1024 * 1024).Wait();
+            sw.Stop();
+            Console.WriteLine($"{100d / sw.Elapsed.TotalSeconds:F0} MB/s");
 
             var para = 10;
             Console.WriteLine($"\n{para} parallel clients...");

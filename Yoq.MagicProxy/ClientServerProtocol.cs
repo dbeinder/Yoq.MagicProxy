@@ -42,7 +42,8 @@ namespace Yoq.MagicProxy
         public ServerFlags ServerFlags;
         public ClientAction ClientAction;
 
-        public byte[] ToBytes() => new[] { (byte)ClientFlags, (byte)ServerAction, (byte)ServerFlags, (byte)ClientAction };
+        public byte[] ToBytes() => new[]
+            {(byte) ClientFlags, (byte) ServerAction, (byte) ServerFlags, (byte) ClientAction};
 
         public static MessageInfo FromArray(byte[] data, int offset)
         {
@@ -57,59 +58,78 @@ namespace Yoq.MagicProxy
         }
     }
 
-    //format: [MessageInfo: 4B][ErrLen: 4B][DataLen: 4B][ExtLen: 4B][Err: string][Data][Ext]
+    //format: [MessageInfo: 4B][ErrLen: 4B][DataLen: 4B][ExtLen: 4B][Err: string][Data][Ext] 
     internal static class SslStreamExtensions
     {
-        public static async Task<(bool, MessageInfo, byte[], byte[])> ReadMessageAsync(this SslStream stream, CancellationToken ct)
+        private const int ChunkSize = 16000;
+
+        private static async Task WriteChunkedAsync(this SslStream ssl, byte[] buffer, CancellationToken ct)
         {
-            var header = new byte[16];
-            var readCnt = await stream.ReadAsync(header, 0, 16, ct).ConfigureAwait(false);
-            if (readCnt == 0) return (false, null, null, null);
+            var pos = 0;
+            while (pos != buffer.Length)
+            {
+                var left = buffer.Length - pos;
+                var writeSize = left > ChunkSize ? ChunkSize : left;
+                await ssl.WriteAsync(buffer, pos, writeSize, ct).ConfigureAwait(false);
+                pos += writeSize;
+            }
+        }
+
+        private static async Task<(bool, byte[])> ReadChunkedAsync(this SslStream ssl, int length, CancellationToken ct)
+        {
+            var buffer = new byte[length];
+            var pos = 0;
+
+            while (pos != buffer.Length)
+            {
+                var left = buffer.Length - pos;
+                var readSize = left > ChunkSize ? ChunkSize : left;
+                var readCnt = await ssl.ReadAsync(buffer, pos, readSize, ct).ConfigureAwait(false);
+                if (readCnt != readSize) return (false, null);
+                pos += readSize;
+            }
+            return (true, buffer);
+        }
+
+        public static async Task<(bool, MessageInfo, byte[], byte[])> ReadMessageAsync(this SslStream stream,
+            CancellationToken ct)
+        {
+            var (headerRead, header) = await stream.ReadChunkedAsync(16, ct).ConfigureAwait(false);
+            if (!headerRead) return (false, null, null, null);
+
             var info = MessageInfo.FromArray(header, 0);
             var errLen = BitConverter.ToInt32(header, 4);
             var datLen = BitConverter.ToInt32(header, 8);
             var extLen = BitConverter.ToInt32(header, 12);
 
             var totalLen = errLen + extLen + datLen;
-            if (totalLen > MagicProxySettings.MaxMessageSize) throw new Exception($"received message too long: {totalLen}");
+            if (totalLen > MagicProxySettings.MaxMessageSize)
+                throw new Exception($"received message too long: {totalLen}");
 
-            var errBuffer = errLen == 0 ? null : new byte[errLen];
-            var datBuffer = datLen == 0 ? null : new byte[datLen];
-            var extBuffer = extLen == 0 ? null : new byte[extLen];
-
-            if (errLen > 0)
-            {
-                readCnt = await stream.ReadAsync(errBuffer, 0, errLen, ct).ConfigureAwait(false);
-                if (readCnt == 0) return (false, info, null, null);
-            }
-
-            if (datLen > 0)
-            {
-                readCnt = await stream.ReadAsync(datBuffer, 0, datLen, ct).ConfigureAwait(false);
-                if (readCnt == 0) return (false, info, null, null);
-            }
-
-            if (extLen > 0) //block for future backwards-compatible protocol extensions
-            {
-                readCnt = await stream.ReadAsync(extBuffer, 0, extLen, ct).ConfigureAwait(false);
-                if (readCnt == 0) return (false, info, null, null);
-            }
-
+            var (errRead, errBuffer) = await stream.ReadChunkedAsync(errLen, ct).ConfigureAwait(false);
+            if (!errRead) return (false, null, null, null);
+            var (datRead, datBuffer) = await stream.ReadChunkedAsync(datLen, ct).ConfigureAwait(false);
+            if (!datRead) return (false, null, null, null);
+            var (extRead, extBuffer) = await stream.ReadChunkedAsync(extLen, ct).ConfigureAwait(false);
+            if (!extRead) return (false, null, null, null);
+            
             return (true, info, errBuffer, datBuffer);
         }
 
-        public static async Task WriteMessageAsync(this SslStream stream, MessageInfo info, byte[] err, byte[] data, CancellationToken ct)
+        public static async Task WriteMessageAsync(this SslStream stream, MessageInfo info, byte[] err, byte[] data,
+            CancellationToken ct)
         {
             var totalLen = (err?.Length ?? 0) + (data?.Length ?? 0);
-            if (totalLen > MagicProxySettings.MaxMessageSize) throw new Exception($"message to be sent is too long: {totalLen}");
+            if (totalLen > MagicProxySettings.MaxMessageSize)
+                throw new Exception($"message to be sent is too long: {totalLen}");
             var header = info.ToBytes()
                 .Concat(BitConverter.GetBytes((Int32)(err?.Length ?? 0)))
                 .Concat(BitConverter.GetBytes((Int32)(data?.Length ?? 0)))
                 .Concat(BitConverter.GetBytes((Int32)0))
                 .ToArray();
-            await stream.WriteAsync(header, 0, 16, ct).ConfigureAwait(false);
-            if (err?.Length > 0) await stream.WriteAsync(err, 0, err.Length, ct).ConfigureAwait(false);
-            if (data?.Length > 0) await stream.WriteAsync(data, 0, data.Length, ct).ConfigureAwait(false);
+            await stream.WriteChunkedAsync(header, ct).ConfigureAwait(false);
+            if (err?.Length > 0) await stream.WriteChunkedAsync(err, ct).ConfigureAwait(false);
+            if (data?.Length > 0) await stream.WriteChunkedAsync(data, ct).ConfigureAwait(false);
             await stream.FlushAsync(ct).ConfigureAwait(false);
         }
     }

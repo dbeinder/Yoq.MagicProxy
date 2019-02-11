@@ -33,7 +33,7 @@ namespace Yoq.MagicProxy.Test
             proxy.SimpleAction().Wait();
             proxy.DoBar(11).Wait();
             var ret = proxy.Foo(42).Result;
-            var raw = proxy.GetRaw().Result;
+            var raw = proxy.GetRaw(0x5000).Result;
             var aa = proxy.GetFromDb<Guid>(123).Result;
             var bb = proxy.GetFromDb<LolClass>(123).Result;
             bb.Member = "aBC";
