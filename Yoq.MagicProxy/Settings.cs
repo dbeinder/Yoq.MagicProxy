@@ -17,7 +17,10 @@ namespace Yoq.MagicProxy
 
         private static JsonSerializerSettings _serializerSettings = new JsonSerializerSettings
         {
-            TypeNameHandling = TypeNameHandling.None
+            TypeNameHandling = TypeNameHandling.None,
+            DateFormatHandling = DateFormatHandling.IsoDateFormat,
+            DateTimeZoneHandling = DateTimeZoneHandling.RoundtripKind,
+            DateParseHandling = DateParseHandling.DateTimeOffset
         };
         public static JsonSerializerSettings SerializerSettings
         {

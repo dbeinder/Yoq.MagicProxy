@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -43,7 +44,7 @@ namespace Yoq.MagicProxy
 
             return typeof(TReturn) == typeof(byte[])
                 ? (TReturn)(object)respData
-                : JToken.Parse(Encoding.UTF8.GetString(respData)).ToObject<TReturn>();
+                : JsonConvert.DeserializeObject<TReturn>(Encoding.UTF8.GetString(respData), MagicProxySettings.SerializerSettings);
         }
     }
 
@@ -126,7 +127,9 @@ namespace Yoq.MagicProxy
             string error = null;
             CompiledLambda lambda;
 
-            var req = JArray.Parse(request);
+            var req = JArray.Load(new JsonTextReader(
+                //stop Json.Net from speculatively parsing any date/times without any rules
+                new StringReader(request)) { DateParseHandling = DateParseHandling.None });
             if (req.Count != 3) throw new ArgumentException("invalid JSON request");
             var method = req[0].ToObject<string>();
             var tArgs = req[1] as JArray;
@@ -169,7 +172,7 @@ namespace Yoq.MagicProxy
                 .Select(a => a.GetType(name))
                 .FirstOrDefault(t => t != null);
 
-            if(type == null) 
+            if (type == null)
                 throw new Exception($"MagicDispatcher: type {name} not found, {MagicProxySettings.TypeSearchAssemblies.Count} assemblies loaded!");
 
             return type;

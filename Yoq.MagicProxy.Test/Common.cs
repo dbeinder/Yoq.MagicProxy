@@ -16,11 +16,13 @@ namespace Yoq.MagicProxy.Test
     {
         Task SimpleAction();
         Task SimpleThrows();
+        Task<DateTimeOffset> DateTest(DateTime dt, DateTimeOffset dto);
         Task DoBar(int x);
         Task<double> Foo(int x);
         Task<byte[]> GetRaw(int count);
         Task Update<T>(T data);
         Task<T> GetFromDb<T>(int y) where T : new();
+        Task<T> GetNull<T>();
         Task<List<T>> Nested<T>() where T : new();
 
         [MagicMethod(MagicMethodType.CancelAuthentication)]
@@ -38,12 +40,15 @@ namespace Yoq.MagicProxy.Test
     public class SecuredBackendProxy : MagicProxyBase, ISecuredBackend
     {
         public Task SimpleAction() => Request(NoParams);
+        public Task<DateTimeOffset> DateTest(DateTime dt, DateTimeOffset dto) => Request<DateTimeOffset>(Params(dt, dto));
         public Task SimpleThrows() => Request(NoParams);
         public Task DoBar(int x) => Request(Params(x));
         public Task<double> Foo(int x) => Request<double>(Params(x));
         public Task<byte[]> GetRaw(int count) => Request<byte[]>(Params(count));
         public Task Update<T>(T data) => RequestGeneric<T>(Params(data));
         public Task<T> GetFromDb<T>(int y) where T : new() => RequestGeneric<T, T>(Params(y));
+        public Task<T> GetNull<T>() => RequestGeneric<T, T>(NoParams);
+
         public Task<List<T>> Nested<T>() where T : new() => RequestGeneric<T, List<T>>(NoParams);
         public Task<bool> Logout() => Request<bool>(NoParams);
     }
@@ -54,6 +59,11 @@ namespace Yoq.MagicProxy.Test
         public double Count = 0;
         public Task SimpleAction() => Task.CompletedTask;
         public Task SimpleThrows() => throw new AccessViolationException("server side failure!");
+        public Task<DateTimeOffset> DateTest(DateTime dt, DateTimeOffset dto)
+        {
+            return Task.FromResult(dto);
+        }
+
         public Task DoBar(int x) => Task.CompletedTask;
 
         public Task<double> Foo(int x)
@@ -72,6 +82,7 @@ namespace Yoq.MagicProxy.Test
 
         public Task Update<T>(T data) => Task.CompletedTask;
         public Task<T> GetFromDb<T>(int y) where T : new() => Task.FromResult(new T());
+        public Task<T> GetNull<T>() => Task.FromResult(default(T));
         public Task<List<T>> Nested<T>() where T : new() => Task.FromResult(new List<T>() { new T(), new T() });
 
         public Task<bool> Authenticate(string user, string password) => Task.FromResult(user == "foo" && password == "bar");

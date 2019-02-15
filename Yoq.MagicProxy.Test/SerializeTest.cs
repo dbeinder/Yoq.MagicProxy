@@ -16,6 +16,7 @@ namespace Yoq.MagicProxy.Test
         public void Test()
         {
             MagicProxySettings.TypeSearchAssemblies.Add(typeof(LolClass).Assembly);
+            MagicProxySettings.TypeSearchAssemblies.Add(typeof(Stopwatch).Assembly);
 
             var impl = new FullBackendImpl();
             var mock = new MagicProxyMockConnection<IPublicBackend, PublicBackendProxy, ISecuredBackend, SecuredBackendProxy>(impl, impl);
@@ -32,6 +33,12 @@ namespace Yoq.MagicProxy.Test
 
             proxy.SimpleAction().Wait();
             proxy.DoBar(11).Wait();
+
+            var dt = new DateTime(2018, 1, 1, 10, 0, 0, DateTimeKind.Local);
+            var dto = new DateTimeOffset(2018, 2,2, 10,0,0,0,TimeSpan.FromHours(4));
+            var roundtrip = proxy.DateTest(dt, dto).Result;
+
+            var isNull = proxy.GetNull<Stopwatch>().Result;
             var ret = proxy.Foo(42).Result;
             var raw = proxy.GetRaw(0x5000).Result;
             var aa = proxy.GetFromDb<Guid>(123).Result;
