@@ -36,7 +36,7 @@ namespace Yoq.MagicProxy
             {
                 await Task.Delay(RequestDelay).ConfigureAwait(false);
                 var impl = publicRequest ? _publicDispatcher : _authenticatedDispatcher;
-                var (err, obj, typ) = await impl.DoRequestRaw(request).ConfigureAwait(false);
+                var (err, obj, _, typ) = await impl.DoRequestRaw(request).ConfigureAwait(false);
                 if (err == null && typ == MagicMethodType.Authenticate && obj is bool b) Authenticated = b;
                 var response = impl.Serialize(obj);
                 WireSniffer?.Invoke(request, err, response);

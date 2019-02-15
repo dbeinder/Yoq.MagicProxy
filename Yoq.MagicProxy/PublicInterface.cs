@@ -12,6 +12,7 @@ namespace Yoq.MagicProxy
         bool Busy { get; }
         bool Connected { get; }
         bool Authenticated { get; }
+        int LastResponseTimeMs { get; }
         Task ConnectAsync();
         Task DisconnectAsync();
     }

@@ -54,7 +54,7 @@ namespace Yoq.MagicProxy
 
     internal interface IMagicDispatcherRaw : IMagicDispatcher
     {
-        Task<(string, object, MagicMethodType)> DoRequestRaw(string request);
+        Task<(string, object, string, MagicMethodType)> DoRequestRaw(string request);
         byte[] Serialize(object response);
     }
 
@@ -120,7 +120,7 @@ namespace Yoq.MagicProxy
                 .Compile();
         }
 
-        async Task<(string, object, MagicMethodType)> IMagicDispatcherRaw.DoRequestRaw(string request)
+        async Task<(string, object, string, MagicMethodType)> IMagicDispatcherRaw.DoRequestRaw(string request)
         {
             object result = 0;
             string error = null;
@@ -157,7 +157,7 @@ namespace Yoq.MagicProxy
             {
                 error = e.ToString();
             }
-            return (error, result, methodEntry.MethodType);
+            return (error, result, method, methodEntry.MethodType);
         }
 
         private Type TypeFromString(string name)
@@ -183,7 +183,7 @@ namespace Yoq.MagicProxy
         async Task<(string, byte[])> IMagicDispatcher.DoRequest(string request)
         {
             IMagicDispatcherRaw self = this;
-            var (err, obj, _) = await self.DoRequestRaw(request).ConfigureAwait(false);
+            var (err, obj, _, _) = await self.DoRequestRaw(request).ConfigureAwait(false);
             return (err, self.Serialize(obj));
         }
     }
