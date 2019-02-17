@@ -57,9 +57,8 @@ namespace PkiTool
             var host = ReadWithDefault("Hostname", "localhost");
             _server = new CertBuilder { SubjectName = $"CN={name}", AltNames = new[] { host }, Issuer = _ca, KeyStrength = 2048, NotAfter = NotAfter }.BuildX509();
             var pw = ReadWithDefault("PFX Password, default = none", "");
-            File.WriteAllBytes("output/server.pfx", _server.Export(X509ContentType.Pfx, pw));
-            Console.WriteLine("Server private key:");
-            Console.WriteLine(_server.ExportPemPrivateKey());
+            File.WriteAllBytes($"output/{host}.encrypted.pfx", _server.Export(X509ContentType.Pfx, pw));
+            Console.WriteLine($"File {host}.encrypted.pfx written");
         }
 
         static void CreateLicenseRoot()
@@ -86,8 +85,6 @@ namespace PkiTool
 
         static void Main(string[] args)
         {
-            var xy = new X509Certificate2(File.ReadAllBytes("gh.crt"));
-
             try { Directory.CreateDirectory("output"); } catch { }
 
             for (; ; )
@@ -113,18 +110,6 @@ namespace PkiTool
                         break;
                     case "L":
                         CreateUserLicense();
-                        break;
-                    case "X":
-
-                        var myCa = new X509Certificate2(File.ReadAllBytes("output/ca.crt"));
-                        var myServer = new X509Certificate2(File.ReadAllBytes("output/server.crt"));
-                        var myLicroot = new X509Certificate2(File.ReadAllBytes("output/licroot.crt"));
-                        var user = new X509Certificate2(File.ReadAllBytes("output/license-kpvbregenz-karin.crt"));
-
-                        Utility.VerifyCert(myServer, true, X509RevocationMode.NoCheck, myCa);
-                        Utility.VerifyCert(myLicroot, true, X509RevocationMode.NoCheck, myCa);
-                        Utility.VerifyCert(user, true, X509RevocationMode.NoCheck, myCa, myLicroot);
-
                         break;
                 }
             }
