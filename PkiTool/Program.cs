@@ -53,11 +53,11 @@ namespace PkiTool
         static void CreateServer()
         {
             _ca = _ca ?? ReadWithPrivKey("ca");
-            var name = ReadWithDefault("CertName", "MobileCare Server Test");
+            var name = ReadWithDefault("CertName", "MobileCare Server localhost");
             var host = ReadWithDefault("Hostname", "localhost");
             _server = new CertBuilder { SubjectName = $"CN={name}", AltNames = new[] { host }, Issuer = _ca, KeyStrength = 2048, NotAfter = NotAfter }.BuildX509();
-            File.WriteAllText("output/server.crt", _server.ExportPemCertificate());
-            //File.WriteAllBytes("output/server.pfx", _server.Export(X509ContentType.Pfx));
+            var pw = ReadWithDefault("PFX Password, default = none", "");
+            File.WriteAllBytes("output/server.pfx", _server.Export(X509ContentType.Pfx, pw));
             Console.WriteLine("Server private key:");
             Console.WriteLine(_server.ExportPemPrivateKey());
         }
