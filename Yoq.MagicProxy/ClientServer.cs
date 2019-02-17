@@ -112,7 +112,8 @@ namespace Yoq.MagicProxy
                 if (_useSsl)
                 {
                     sslStream = new SslStream(tcpStream, false, UserCertificateValidationCallback, null, EncryptionPolicy.RequireEncryption);
-                    await sslStream.AuthenticateAsServerAsync(_serverCertificate, true, SslProtocols.Tls12, false).ConfigureAwait(false);
+                    await sslStream.AuthenticateAsServerAsync(_serverCertificate, true, false).ConfigureAwait(false);
+                    Console.WriteLine($"[{clientEndPoint}] SSL: {sslStream.SslProtocol}, {sslStream.CipherAlgorithm}, {sslStream.HashAlgorithm}, {sslStream.KeyExchangeAlgorithm}");
                     if (!sslStream.IsSigned || !sslStream.IsEncrypted) throw new Exception("Non secure connection");
                     impl.ClientCertificate = sslStream.RemoteCertificate == null ? null : new X509Certificate2(sslStream.RemoteCertificate);
                 }
@@ -353,7 +354,7 @@ namespace Yoq.MagicProxy
             {
                 _sslStream = new SslStream(tcpStream, false, ValidateServerCertificate, null, EncryptionPolicy.RequireEncryption);
                 var clientCerts = _clientPrivCert == null ? null : new X509CertificateCollection(new[] { _clientPrivCert });
-                await _sslStream.AuthenticateAsClientAsync(_hostname, clientCerts, SslProtocols.Tls12, false).ConfigureAwait(false);
+                await _sslStream.AuthenticateAsClientAsync(_hostname, clientCerts, false).ConfigureAwait(false);
                 if (!_sslStream.IsSigned || !_sslStream.IsEncrypted) throw new Exception("Non secure connection");
             }
 

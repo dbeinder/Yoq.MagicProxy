@@ -67,6 +67,8 @@ namespace PkiTool
             var name = ReadWithDefault("CertName", "MobileCare Licensing Root 0");
             _licroot = new CertBuilder { SubjectName = $"CN={name}", Issuer = _ca, Intermediate = true, KeyStrength = 2048, NotAfter = NotAfter }.BuildX509();
             File.WriteAllText("output/licroot.crt", _licroot.ExportPemCertificate());
+            var pw = ReadWithDefault("PFX Password, default = none", "");
+            File.WriteAllBytes($"output/licroot.pfx", _licroot.Export(X509ContentType.Pfx, pw));
             Console.WriteLine("Licensing root private key:");
             Console.WriteLine(_licroot.ExportPemPrivateKey());
         }
