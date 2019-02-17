@@ -358,9 +358,10 @@ namespace Yoq.MagicProxy
             }
 
             _dataStream = _useSsl ? (Stream)_sslStream : tcpStream;
-            var (succ, connState, _, _) = await _dataStream.ReadMessageAsync(CancellationToken.None).ConfigureAwait(false);
+            var (succ, connState, errBytes, _) = await _dataStream.ReadMessageAsync(CancellationToken.None).ConfigureAwait(false);
             if (!succ) throw new Exception("server did not answer connect with initial state update");
             HandleConnectionStateUpdate(connState);
+            if (errBytes?.Length > 0) throw new Exception(Encoding.UTF8.GetString(errBytes));
 
             Connected = true;
         }
