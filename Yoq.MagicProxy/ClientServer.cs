@@ -13,27 +13,44 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using CryptLink.SigningFramework;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace Yoq.MagicProxy
 {
-    public sealed class MagicProxyServer<TIPublic, TIAuthenticated>
+    public sealed class MagicProxyServer<TInterface, TImpl, TConnectionState>
+        where TInterface : class
+        where TImpl : class, TInterface, IMagicBackendImpl<TConnectionState>
     {
-        private const bool UseSsl = true;
-        private readonly IMagicDispatcherRaw _publicDispatcher;
-        private readonly IMagicDispatcherRaw _authenticatedDispatcher;
+        public bool Logging = false;
+        private readonly bool _useSsl;
+        private readonly IMagicDispatcherRaw<TInterface> _dispatcher;
+        private readonly Func<TImpl> _implFactory;
 
         private readonly X509Certificate2 _serverCertificate;
-        private readonly int _port;
+        private readonly X509Certificate2 _clientCa;
+        private readonly int _listenPort;
 
         private Task _serverLoop;
         private CancellationTokenSource _cancelSource;
+        private readonly Dictionary<string, MethodEntry> _methodTable;
 
-        public MagicProxyServer(TIPublic publicImpl, TIAuthenticated authenticatedImpl, int port, X509Certificate2 privCert)
+        /// <param name="serverPrivCert">If null, MagicProxy uses a plaintext TCP connection</param>
+        /// <param name="clientCa">If null, the client certificate is not verified</param>
+        public MagicProxyServer(Func<TImpl> implFactory, int listenPort, X509Certificate2 serverPrivCert = null, X509Certificate2 clientCa = null)
         {
-            _publicDispatcher = new MagicDispatcher<TIPublic>(publicImpl);
-            _authenticatedDispatcher = new MagicDispatcher<TIAuthenticated>(authenticatedImpl);
-            _port = port;
-            _serverCertificate = privCert;
+            _methodTable = MagicProxyHelper.ReadInterfaceMethods<TInterface, MethodEntry>();
+            _dispatcher = new MagicDispatcher<TInterface>();
+            _implFactory = implFactory;
+            _listenPort = listenPort;
+            if (serverPrivCert != null)
+            {
+                if (!serverPrivCert.HasPrivateKey) throw new ArgumentException("server certificate need private key");
+                _useSsl = true;
+                _serverCertificate = serverPrivCert;
+                _clientCa = clientCa;
+            }
         }
 
         public void StartServer()
@@ -51,7 +68,7 @@ namespace Yoq.MagicProxy
 
             try
             {
-                listener = new TcpListener(IPAddress.Any, _port);
+                listener = new TcpListener(IPAddress.Any, _listenPort);
                 listener.Start();
 
                 while (true)
@@ -79,81 +96,98 @@ namespace Yoq.MagicProxy
 
         private async void ClientConnection(TcpClient client, CancellationToken ct)
         {
-            var authenticated = false;
+            var clientEndPoint = client?.Client?.RemoteEndPoint;
+            var impl = _implFactory();
+            impl.RemoteEndPoint = clientEndPoint;
+
             SslStream sslStream = null;
             Stream dataStream = null;
-            var clientEndPoint = client?.Client?.RemoteEndPoint;
             try
             {
+                Console.WriteLine($"[{clientEndPoint}] Client connected");
+
                 var tcpStream = client.GetStream();
                 tcpStream.ReadTimeout = 5000;
                 tcpStream.WriteTimeout = 5000;
 
-                if (UseSsl)
+                if (_useSsl)
                 {
-                    sslStream = new SslStream(tcpStream, false);
-                    await sslStream.AuthenticateAsServerAsync(_serverCertificate, false, false).ConfigureAwait(false);
+                    sslStream = new SslStream(tcpStream, false, UserCertificateValidationCallback, null, EncryptionPolicy.RequireEncryption);
+                    await sslStream.AuthenticateAsServerAsync(_serverCertificate, true, SslProtocols.Tls12, false).ConfigureAwait(false);
+                    if (!sslStream.IsSigned || !sslStream.IsEncrypted) throw new Exception("Non secure connection");
+                    impl.ClientCertificate = sslStream.RemoteCertificate == null ? null : new X509Certificate2(sslStream.RemoteCertificate);
                 }
-
-                dataStream = UseSsl ? (Stream) sslStream : tcpStream;
-                Console.WriteLine($"[{clientEndPoint}] Client connected");
+                dataStream = _useSsl ? (Stream)sslStream : tcpStream;
+                
+                var connError = await impl.ValidateConnection().ConfigureAwait(false);
+                var connErrorBytes = connError == null ? null : Encoding.UTF8.GetBytes(connError);
+                await dataStream.WriteMessageAsync(impl.ConnectionStateUInt, connErrorBytes, null, ct).ConfigureAwait(false);
+                if (connError != null)
+                {
+                    Console.WriteLine($"[{clientEndPoint}] Client declined by Impl: {connError}");
+                    return;
+                }
 
                 while (true)
                 {
-                    var (success, clientInfo, _, reqBytes) = await dataStream.ReadMessageAsync(ct).ConfigureAwait(false);
+                    var (success, clientState, _, reqBytes) = await dataStream.ReadMessageAsync(ct).ConfigureAwait(false);
                     if (!success) break;
-
-                    switch (clientInfo.ServerAction)
-                    {
-                        case ServerAction.None: break;
-                        //case ServerAction.Logout: authenticated = false; break;
-                        default: throw new Exception($"[{clientEndPoint}] unknown server action: [{clientInfo.ServerAction}]");
-                    }
 
                     var errData = new byte[0];
                     var responseData = new byte[0];
+                    string dbgQuery = "<none>";
+                    long dbgExecTime = 0;
 
                     if (reqBytes.Length > 0)
                     {
                         var request = Encoding.UTF8.GetString(reqBytes);
-
-                        var publicRequest = (clientInfo.ClientFlags & ClientFlags.PublicRequest) > 0;
-                        var impl = publicRequest ? _publicDispatcher : _authenticatedDispatcher;
-
-                        if (!publicRequest && !authenticated)
-                            throw new Exception($"[{clientEndPoint}] Received request from unauthenticated connection!");
-
-                        var sw = Stopwatch.StartNew();
-                        var (err, res, code, type) = await impl.DoRequestRaw(request).ConfigureAwait(false);
-                        sw.Stop();
-                        Console.Write($"[{clientEndPoint}] Request [{code}] exec: {sw.ElapsedMilliseconds}ms");
-
-                        if (err == null)
+                        try
                         {
-                            switch (type)
-                            {
-                                case MagicMethodType.Normal: break;
-                                case MagicMethodType.Authenticate:
-                                    if (res is bool b) authenticated = b;
-                                    else Console.WriteLine($"[{clientEndPoint}] Authenticate method returned: [{res}]");
-                                    break;
-                                case MagicMethodType.CancelAuthentication:
-                                    if (res is bool doCancel && doCancel) authenticated = false;
-                                    else Console.WriteLine($"[{clientEndPoint}] CancelAuthentication method returned: [{res}]");
-                                    break;
-                            }
+                            var req = JArray.Load(new JsonTextReader(
+                                    //stop Json.Net from speculatively parsing any date/times without any rules
+                                    new StringReader(request))
+                            { DateParseHandling = DateParseHandling.None });
 
-                            responseData = impl.Serialize(res);
+                            if (req.Count != 3) throw new ArgumentException("invalid JSON request");
+                            var method = req[0].ToObject<string>();
+                            var tArgs = req[1] as JArray;
+                            var args = req[2] as JArray;
+
+                            var methodEntry = _methodTable[method];
+                            var missing = methodEntry.RequiredFlags & ~impl.ConnectionStateUInt;
+                            if (missing > 0)
+                                throw new Exception($"Method [{method}] is not allowed, state(s) missing: [{(TConnectionState)(object)missing}]");
+
+                            var sw = Stopwatch.StartNew();
+                            var (err, res) = await _dispatcher.DoRequestRaw(impl, method, tArgs, args).ConfigureAwait(false);
+                            sw.Stop();
+                            dbgExecTime = sw.ElapsedMilliseconds;
+                            dbgQuery = method;
+
+                            if (err == null)
+                            {
+                                responseData = _dispatcher.Serialize(res);
+                            }
+                            else
+                            {
+                                Console.WriteLine($"[{clientEndPoint}] Impl Exception: " + err);
+                                errData = Encoding.UTF8.GetBytes(err);
+                            }
                         }
-                        else errData = Encoding.UTF8.GetBytes(err);
+                        catch (Exception e)
+                        {
+                            Console.WriteLine($"[{clientEndPoint}] Connection Exception: " + e);
+                            errData = Encoding.UTF8.GetBytes(e.ToString());
+                            responseData = new byte[0];
+                        }
                     }
 
-                    var info = new MessageInfo { ServerFlags = authenticated ? ServerFlags.IsAuthenticated : ServerFlags.None };
-
                     var sw1 = Stopwatch.StartNew();
-                    await dataStream.WriteMessageAsync(info, errData, responseData, ct).ConfigureAwait(false);
+                    await dataStream.WriteMessageAsync(impl.ConnectionStateUInt, errData, responseData, ct).ConfigureAwait(false);
                     sw1.Stop();
-                    Console.WriteLine($" response send: {sw1.ElapsedMilliseconds}ms");
+
+                    if (Logging)
+                        Console.WriteLine($"[{clientEndPoint}] run:{(dbgExecTime + "ms"),6} tx:{(sw1.ElapsedMilliseconds + "ms"),6} {dbgQuery}");
                 }
             }
             catch (Exception e)
@@ -173,37 +207,51 @@ namespace Yoq.MagicProxy
                 client?.Close();
             }
         }
+
+        private bool UserCertificateValidationCallback(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
+        {
+            if (_clientCa == null) return true;
+            return MagicProxyHelper.VerifyChainWithCa(chain, sslPolicyErrors, _clientCa);
+        }
     }
 
-    public abstract class MagicProxyClientBase<TPublicProxy, TAuthenticatedProxy>
-        where TPublicProxy : MagicProxyBase, new()
-        where TAuthenticatedProxy : MagicProxyBase, new()
+    public abstract class MagicProxyClientBase<TInterface, TProxy, TConnectionState> : IMagicDispatcher
+        where TProxy : MagicProxyBase, TInterface, new()
     {
         private readonly SemaphoreSlim _sendQueueCounter = new SemaphoreSlim(0, Int32.MaxValue);
         private readonly SemaphoreSlim _sendLock = new SemaphoreSlim(1, 1);
 
         public event PropertyChangedEventHandler PropertyChanged;
 
-        public TPublicProxy PublicProxy { get; }
-        public TAuthenticatedProxy AuthenticatedProxy { get; }
+        internal readonly Dictionary<string, MethodEntry> MethodTable;
+        public TInterface Proxy { get; }
 
-        private bool _busy, _connected, _authenticated;
+        private bool _busy, _connected;
+        private uint _connectionStateUint;
         private int _lastResponseTimeMs;
+
         public bool Busy
         {
             get => _busy;
             protected set { _busy = value; InvokePropertyChanged(); }
         }
+
         public bool Connected
         {
             get => _connected;
             protected set { _connected = value; InvokePropertyChanged(); }
         }
-        public bool Authenticated
+
+        public TConnectionState ConnectionState => (TConnectionState)Enum.ToObject(typeof(TConnectionState), _connectionStateUint);
+        private void ConnectionStateChanged() => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ConnectionState)));
+
+        protected void HandleConnectionStateUpdate(uint newState)
         {
-            get => _authenticated;
-            protected set { _authenticated = value; InvokePropertyChanged(); }
+            if (_connectionStateUint == newState) return;
+            _connectionStateUint = newState;
+            ConnectionStateChanged();
         }
+
         public int LastResponseTimeMs
         {
             get => _lastResponseTimeMs;
@@ -213,19 +261,11 @@ namespace Yoq.MagicProxy
         private void InvokePropertyChanged([CallerMemberName] string name = null)
             => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 
-        private class DispatcherShim : IMagicDispatcher
-        {
-            public bool PublicRequest;
-            public MagicProxyClientBase<TPublicProxy, TAuthenticatedProxy> ProxyClient;
-            public Task<(string, byte[])> DoRequest(string request) => ProxyClient.DoRequest(request, PublicRequest);
-        }
 
         internal MagicProxyClientBase()
         {
-            PublicProxy = new TPublicProxy();
-            AuthenticatedProxy = new TAuthenticatedProxy();
-            PublicProxy.MagicDispatcher = new DispatcherShim { ProxyClient = this, PublicRequest = true };
-            AuthenticatedProxy.MagicDispatcher = new DispatcherShim { ProxyClient = this, PublicRequest = false };
+            Proxy = new TProxy { MagicDispatcher = this };
+            MethodTable = MagicProxyHelper.ReadInterfaceMethods<TInterface, MethodEntry>();
         }
 
         protected async Task<TRet> RunQuerySequentially<TRet>(Func<Task<TRet>> fn)
@@ -235,7 +275,7 @@ namespace Yoq.MagicProxy
                 if (_sendQueueCounter.Release() == 0) Busy = true;
                 await _sendLock.WaitAsync().ConfigureAwait(false);
                 if (!Connected) throw new Exception("Proxy not connected");
-                
+
                 var sw = new Stopwatch();
                 sw.Start();
                 var queryRes = await fn().ConfigureAwait(false);
@@ -256,46 +296,73 @@ namespace Yoq.MagicProxy
 
         public abstract Task DisconnectAsync();
 
-        protected abstract Task<(string, byte[])> DoRequest(string request, bool publicRequest);
+        protected abstract Task<(string, byte[])> DoRequestImpl(string request);
+
+        Task<(string, byte[])> IMagicDispatcher.DoRequest(string method, JArray tArgs, JArray args)
+        {
+            var required = MethodTable[method].RequiredFlags;
+            var missing = required & ~_connectionStateUint;
+            if (missing > 0) throw new Exception($"Method [{method}] is not allowed, state(s) missing: [{Enum.ToObject(typeof(TConnectionState), missing)}]");
+            var request = new JArray(method, tArgs, args).ToString(Formatting.None);
+            return DoRequestImpl(request);
+        }
     }
 
-    public sealed class MagicProxyClient<TPublicProxy, TAuthenticatedProxy> : MagicProxyClientBase<TPublicProxy, TAuthenticatedProxy>, IMagicConnection<TPublicProxy, TAuthenticatedProxy>
-        where TPublicProxy : MagicProxyBase, new()
-        where TAuthenticatedProxy : MagicProxyBase, new()
+    public sealed class MagicProxyClient<TInterface, TProxy, TConnectionState>
+        : MagicProxyClientBase<TInterface, TProxy, TConnectionState>, IMagicConnection<TInterface, TConnectionState>
+        where TProxy : MagicProxyBase, TInterface, new()
     {
-        private const bool UseSsl = true;
+        private readonly bool _useSsl;
         private readonly int _port;
-        private readonly string _server;
-        private readonly X509Certificate2 _caCert;
+        private readonly string _hostname;
+        private readonly X509Certificate2 _serverCaCert;
+        private readonly X509Certificate2 _clientPrivCert;
 
         private Stream _dataStream;
         private SslStream _sslStream;
         private TcpClient _tcpClient;
 
-        public MagicProxyClient(string server, int port, X509Certificate2 pubCert)
+        /// <param name="serverCaCert">If null, MagicProxy uses a plaintext TCP connection</param>
+        /// <param name="clientPrivCert">If null, the client does not authenticate using a client certificate</param>
+        public MagicProxyClient(string hostname, int port, X509Certificate2 serverCaCert = null, X509Certificate2 clientPrivCert = null)
         {
-            _server = server;
+            _hostname = hostname;
             _port = port;
-            _caCert = pubCert;
+
+            if (serverCaCert != null)
+            {
+                _useSsl = true;
+                _serverCaCert = serverCaCert;
+                if (clientPrivCert != null)
+                {
+                    _clientPrivCert = clientPrivCert.HasPrivateKey
+                        ? clientPrivCert
+                        : throw new ArgumentException("client certificate need private key");
+                }
+            }
         }
 
         public override async Task ConnectAsync()
         {
-            if (Connected) throw new Exception("Already connected");
-
-            var commonName = _caCert.GetNameInfo(X509NameType.SimpleName, false);
+            if (Connected) return;
 
             _tcpClient = new TcpClient();
-            await _tcpClient.ConnectAsync(_server, _port).ConfigureAwait(false);
+            await _tcpClient.ConnectAsync(_hostname, _port).ConfigureAwait(false);
             var tcpStream = _tcpClient.GetStream();
 
-            if (UseSsl)
+            if (_useSsl)
             {
-                _sslStream = new SslStream(tcpStream, false, ValidateServerCertificate, null);
-                await _sslStream.AuthenticateAsClientAsync(commonName).ConfigureAwait(false);
+                _sslStream = new SslStream(tcpStream, false, ValidateServerCertificate, null, EncryptionPolicy.RequireEncryption);
+                var clientCerts = _clientPrivCert == null ? null : new X509CertificateCollection(new[] { _clientPrivCert });
+                await _sslStream.AuthenticateAsClientAsync(_hostname, clientCerts, SslProtocols.Tls12, false).ConfigureAwait(false);
+                if (!_sslStream.IsSigned || !_sslStream.IsEncrypted) throw new Exception("Non secure connection");
             }
 
-            _dataStream = UseSsl ? (Stream)_sslStream : tcpStream;
+            _dataStream = _useSsl ? (Stream)_sslStream : tcpStream;
+            var (succ, connState, _, _) = await _dataStream.ReadMessageAsync(CancellationToken.None).ConfigureAwait(false);
+            if (!succ) throw new Exception("server did not answer connect with initial state update");
+            HandleConnectionStateUpdate(connState);
+
             Connected = true;
         }
 
@@ -304,56 +371,36 @@ namespace Yoq.MagicProxy
             if (!Connected || _dataStream == null) return;
             try
             {
-                if(UseSsl) await _sslStream.ShutdownAsync().ConfigureAwait(false);
+                if (_useSsl) await _sslStream.ShutdownAsync().ConfigureAwait(false);
                 _tcpClient?.Close();
             }
             catch (Exception) { }
             Connected = false;
         }
 
-        private Task<(bool, MessageInfo, byte[], byte[])> QueryServerSafely(MessageInfo info, byte[] reqBytes) =>
+        private Task<(bool, uint, byte[], byte[])> QueryServerSafely(uint clientState, byte[] reqBytes) =>
             RunQuerySequentially(async () =>
             {
-                await _dataStream.WriteMessageAsync(info, null, reqBytes, CancellationToken.None).ConfigureAwait(false);
+                await _dataStream.WriteMessageAsync(clientState, null, reqBytes, CancellationToken.None).ConfigureAwait(false);
                 var result = await _dataStream.ReadMessageAsync(CancellationToken.None).ConfigureAwait(false);
-                var (readSuccessful, srvInfo, _, _) = result;
-                if(readSuccessful) HandleServerResponse(srvInfo);
+                var (readSuccessful, connectionState, _, _) = result;
+                if (readSuccessful) HandleConnectionStateUpdate(connectionState);
                 return result;
             });
 
-        private void HandleServerResponse(MessageInfo srvInfo)
+        protected override async Task<(string, byte[])> DoRequestImpl(string request)
         {
-            Authenticated = (srvInfo.ServerFlags & ServerFlags.IsAuthenticated) > 0;
-            switch (srvInfo.ClientAction)
-            {
-                case ClientAction.None: break;
-                default: throw new Exception($"unknown server action: [{srvInfo.ClientAction}]");
-            }
-        }
-
-        protected override async Task<(string, byte[])> DoRequest(string request, bool publicRequest)
-        {
-            if (!publicRequest && !Authenticated) throw new Exception("Proxy not authenticated");
             var requestBytes = Encoding.UTF8.GetBytes(request);
-            var info = new MessageInfo { ClientFlags = publicRequest ? ClientFlags.PublicRequest : ClientFlags.None };
-
-            var (success, _, err, resp) = await QueryServerSafely(info, requestBytes).ConfigureAwait(false);
+            var (success, _, err, resp) = await QueryServerSafely(0, requestBytes).ConfigureAwait(false);
             if (!success) throw new Exception("No response from server");
             var errString = err.Length > 0 ? Encoding.UTF8.GetString(err) : null;
             return (errString, resp);
         }
 
-        private bool ValidateServerCertificate(
-              object sender,
-              X509Certificate certificate,
-              X509Chain chain,
-              SslPolicyErrors sslPolicyErrors)
+        private bool ValidateServerCertificate(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
         {
-            //ignore RemoteCertificateChainErrors
-            sslPolicyErrors &= ~SslPolicyErrors.RemoteCertificateChainErrors;
-            if (certificate.GetPublicKeyString() != _caCert.GetPublicKeyString())
-                return false;
-            return sslPolicyErrors == SslPolicyErrors.None;
+            if (_serverCaCert == null) return true;
+            return MagicProxyHelper.VerifyChainWithCa(chain, sslPolicyErrors, _serverCaCert);
         }
     }
 }

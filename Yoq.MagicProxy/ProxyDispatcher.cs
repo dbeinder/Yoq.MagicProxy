@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
+using System.Web.UI.WebControls;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -38,8 +39,7 @@ namespace Yoq.MagicProxy
             if (MagicDispatcher == null)
                 throw new Exception("MagicProxySerializer must not be used before setting up MagicProxyServer");
 
-            var reqString = new JArray(method, tArgs, jArgs).ToString(Formatting.None);
-            var (err, respData) = await MagicDispatcher.DoRequest(reqString).ConfigureAwait(false);
+            var (err, respData) = await MagicDispatcher.DoRequest(method, tArgs, jArgs).ConfigureAwait(false);
             if (err != null) throw new ServerSideException(err);
 
             return typeof(TReturn) == typeof(byte[])
@@ -50,12 +50,12 @@ namespace Yoq.MagicProxy
 
     internal interface IMagicDispatcher
     {
-        Task<(string, byte[])> DoRequest(string request);
+        Task<(string, byte[])> DoRequest(string method, JArray tArgs, JArray args);
     }
 
-    internal interface IMagicDispatcherRaw : IMagicDispatcher
+    internal interface IMagicDispatcherRaw<in TInterface>
     {
-        Task<(string, object, string, MagicMethodType)> DoRequestRaw(string request);
+        Task<(string, object)> DoRequestRaw(TInterface impl, string method, JArray tArgs, JArray args);
         byte[] Serialize(object response);
     }
 
@@ -71,32 +71,26 @@ namespace Yoq.MagicProxy
         private static async Task<object> ToObjectAsyncVoid(Task task) { await task.ConfigureAwait(false); return 0; }
     }
 
-    internal class MagicDispatcher<TInterface> : MagicDispatcher, IMagicDispatcherRaw
+    internal class MagicDispatcher<TInterface> : MagicDispatcher, IMagicDispatcherRaw<TInterface>
     {
         protected delegate Task<object> CompiledLambda(TInterface b, JArray j);
-        protected class MethodEntry
+        protected class DispatcherMethodEntry : MethodEntry
         {
-            public MethodInfo MethodInfo;
             public CompiledLambda NonGeneric;
-            public MagicMethodType MethodType;
             public Dictionary<string, CompiledLambda> GenericLambdas = new Dictionary<string, CompiledLambda>();
         }
 
-        protected readonly Dictionary<string, MethodEntry> MethodCache;
-        protected readonly TInterface BackendImpl;
+        protected readonly Dictionary<string, DispatcherMethodEntry> MethodCache;
 
-        public MagicDispatcher(TInterface backendImpl)
+        public MagicDispatcher()
         {
-            MagicProxySettings.CheckInterface<TInterface>();
-            BackendImpl = backendImpl;
-            MethodCache = typeof(TInterface).GetMethods()
-                .ToDictionary(mi => mi.Name,
-                    mi => new MethodEntry
-                    {
-                        MethodInfo = mi,
-                        MethodType = mi.GetCustomAttribute<MagicMethodAttribute>()?.MethodType ?? MagicMethodType.Normal,
-                        NonGeneric = mi.IsGenericMethod ? null : BuildLambda(mi)
-                    });
+            MethodCache = MagicProxyHelper.ReadInterfaceMethods<TInterface, DispatcherMethodEntry>(CacheBuilder);
+        }
+
+        private void CacheBuilder(DispatcherMethodEntry entry)
+        {
+            entry.NonGeneric = entry.MethodInfo.IsGenericMethod ? null : BuildLambda(entry.MethodInfo);
+            entry.GenericLambdas = new Dictionary<string, CompiledLambda>();
         }
 
         private CompiledLambda BuildLambda(MethodInfo mi)
@@ -121,19 +115,12 @@ namespace Yoq.MagicProxy
                 .Compile();
         }
 
-        async Task<(string, object, string, MagicMethodType)> IMagicDispatcherRaw.DoRequestRaw(string request)
+        async Task<(string, object)> IMagicDispatcherRaw<TInterface>.DoRequestRaw(TInterface impl, string method, JArray tArgs, JArray args)
         {
             object result = 0;
             string error = null;
             CompiledLambda lambda;
 
-            var req = JArray.Load(new JsonTextReader(
-                //stop Json.Net from speculatively parsing any date/times without any rules
-                new StringReader(request)) { DateParseHandling = DateParseHandling.None });
-            if (req.Count != 3) throw new ArgumentException("invalid JSON request");
-            var method = req[0].ToObject<string>();
-            var tArgs = req[1] as JArray;
-            var jArgs = req[2] as JArray;
             if (!MethodCache.TryGetValue(method, out var methodEntry))
                 throw new Exception($"method {method} not found!");
             if (tArgs.Count == 0)
@@ -154,13 +141,13 @@ namespace Yoq.MagicProxy
 
             try
             {
-                result = await lambda(BackendImpl, jArgs).ConfigureAwait(false);
+                result = await lambda(impl, args).ConfigureAwait(false);
             }
             catch (Exception e)
             {
                 error = e.ToString();
             }
-            return (error, result, method, methodEntry.MethodType);
+            return (error, result);
         }
 
         private Type TypeFromString(string name)
@@ -178,16 +165,9 @@ namespace Yoq.MagicProxy
             return type;
         }
 
-        byte[] IMagicDispatcherRaw.Serialize(object response)
+        byte[] IMagicDispatcherRaw<TInterface>.Serialize(object response)
             => response is byte[] raw
                 ? raw
                 : Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(response, MagicProxySettings.SerializerSettings));
-
-        async Task<(string, byte[])> IMagicDispatcher.DoRequest(string request)
-        {
-            IMagicDispatcherRaw self = this;
-            var (err, obj, _, _) = await self.DoRequestRaw(request).ConfigureAwait(false);
-            return (err, self.Serialize(obj));
-        }
     }
 }

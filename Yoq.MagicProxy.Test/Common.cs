@@ -1,44 +1,57 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading.Tasks;
 
 namespace Yoq.MagicProxy.Test
 {
-    public interface IPublicBackend
+    [Flags]
+    public enum ConnectionFlags : uint
     {
-        [MagicMethod(MagicMethodType.Authenticate)]
-        Task<bool> Authenticate(string user, string password);
+        None = 0,
+        ClientVersionOk = 0x01,
+        ClientCertOk = 0x02,
+        LoggedIn = 0x04
     }
 
-    public interface ISecuredBackend
+    [DefaultRequiredFlags(ConnectionFlags.ClientVersionOk | ConnectionFlags.ClientCertOk | ConnectionFlags.LoggedIn)]
+    public interface IBackend
     {
+        [RequiredFlags(ConnectionFlags.ClientCertOk)]
+        Task<bool> ClientUpdateRequired(int clientVersion);
+
+        [RequiredFlags(ConnectionFlags.ClientCertOk | ConnectionFlags.ClientVersionOk)]
+        Task<bool> Authenticate(string user, string password);
+
+        Task Logout();
+
+        [RequiredFlags(ConnectionFlags.None)]
+        Task<double> Foo(int x); //fully public
+
         Task SimpleAction();
         Task SimpleThrows();
         Task<DateTimeOffset> DateTest(DateTime dt, DateTimeOffset dto);
         Task DoBar(int x);
-        Task<double> Foo(int x);
         Task<byte[]> GetRaw(int count);
         Task Update<T>(T data);
         Task<T> GetFromDb<T>(int y) where T : new();
         Task<T> GetNull<T>();
         Task<List<T>> Nested<T>() where T : new();
 
-        [MagicMethod(MagicMethodType.CancelAuthentication)]
-        Task<bool> Logout();
     }
 
     public class LolClass { public string Member = "FooBar"; }
     public class LolDerived : LolClass { public string AddlMember = "FFFXX"; }
 
-    public class PublicBackendProxy : MagicProxyBase, IPublicBackend
+    public class BackendProxy : MagicProxyBase, IBackend
     {
+        public Task<bool> ClientUpdateRequired(int clientVersion) => Request<bool>(Params(clientVersion));
         public Task<bool> Authenticate(string user, string password) => Request<bool>(Params(user, password));
-    }
+        public Task Logout() => Request(NoParams);
 
-    public class SecuredBackendProxy : MagicProxyBase, ISecuredBackend
-    {
         public Task SimpleAction() => Request(NoParams);
         public Task<DateTimeOffset> DateTest(DateTime dt, DateTimeOffset dto) => Request<DateTimeOffset>(Params(dt, dto));
         public Task SimpleThrows() => Request(NoParams);
@@ -50,13 +63,19 @@ namespace Yoq.MagicProxy.Test
         public Task<T> GetNull<T>() => RequestGeneric<T, T>(NoParams);
 
         public Task<List<T>> Nested<T>() where T : new() => RequestGeneric<T, List<T>>(NoParams);
-        public Task<bool> Logout() => Request<bool>(NoParams);
+
     }
 
-    public class FullBackendImpl : ISecuredBackend, IPublicBackend
+    public class FullBackendImpl : IBackend, IMagicBackendImpl<ConnectionFlags>
     {
+        protected ConnectionFlags ConnectionState = ConnectionFlags.None;
+        public uint ConnectionStateUInt => (uint)ConnectionState;
+        public EndPoint RemoteEndPoint { get; set; }
+        public X509Certificate2 ClientCertificate { get; set; }
+
         private readonly object _lock = new object();
         public double Count = 0;
+
         public Task SimpleAction() => Task.CompletedTask;
         public Task SimpleThrows() => throw new AccessViolationException("server side failure!");
         public Task<DateTimeOffset> DateTest(DateTime dt, DateTimeOffset dto)
@@ -85,7 +104,33 @@ namespace Yoq.MagicProxy.Test
         public Task<T> GetNull<T>() => Task.FromResult(default(T));
         public Task<List<T>> Nested<T>() where T : new() => Task.FromResult(new List<T>() { new T(), new T() });
 
-        public Task<bool> Authenticate(string user, string password) => Task.FromResult(user == "foo" && password == "bar");
-        public Task<bool> Logout() => Task.FromResult(true);
+        public Task<bool> ClientUpdateRequired(int clientVersion)
+        {
+            var updateRequired = clientVersion != 77;
+            ConnectionState = (ConnectionState & ~ConnectionFlags.ClientVersionOk) |
+                              (!updateRequired ? ConnectionFlags.ClientVersionOk : 0);
+            return Task.FromResult(updateRequired);
+        }
+
+        public Task<bool> Authenticate(string user, string password)
+        {
+            var goodLogin = user == "foo" && password == "bar";
+            ConnectionState = (ConnectionState & ~ConnectionFlags.LoggedIn) |
+                              (goodLogin ? ConnectionFlags.LoggedIn : 0);
+            return Task.FromResult(goodLogin);
+        }
+
+        public Task<string> ValidateConnection()
+        {
+            string error = null;
+            if (ClientCertificate == null)
+                error = "No client cert [FullBackendImpl]";
+            else
+                ConnectionState |= ConnectionFlags.ClientCertOk;
+
+            return Task.FromResult(error);
+        }
+
+        public Task Logout() => Task.FromResult(ConnectionFlags.None);
     }
 }

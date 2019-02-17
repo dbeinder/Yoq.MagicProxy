@@ -19,7 +19,7 @@ namespace Yoq.MagicProxy.Test
             MagicProxySettings.TypeSearchAssemblies.Add(typeof(Stopwatch).Assembly);
 
             var impl = new FullBackendImpl();
-            var mock = new MagicProxyMockConnection<IPublicBackend, PublicBackendProxy, ISecuredBackend, SecuredBackendProxy>(impl, impl);
+            var mock = new MagicProxyMockConnection<IBackend, BackendProxy, FullBackendImpl, ConnectionFlags>(impl);
 
             //display line data
             mock.WireSniffer = (req, err, resp) =>
@@ -28,8 +28,16 @@ namespace Yoq.MagicProxy.Test
                      Console.WriteLine(err == null ? Encoding.UTF8.GetString(resp) : $"err: {err}");
                  };
             mock.ConnectAsync().Wait();
-            mock.PublicProxy.Authenticate("foo", "bar").Wait();
-            var proxy = mock.AuthenticatedProxy;
+            var state0 = mock.ConnectionState;
+            mock.Proxy.ClientUpdateRequired(77).Wait();
+            var state1 = mock.ConnectionState;
+            mock.Proxy.ClientUpdateRequired(717).Wait();
+            var state2 = mock.ConnectionState;
+            mock.Proxy.ClientUpdateRequired(77).Wait();
+            var state3 = mock.ConnectionState;
+            mock.Proxy.Authenticate("foo", "bar").Wait();
+            var state4 = mock.ConnectionState;
+            var proxy = mock.Proxy;
 
             proxy.SimpleAction().Wait();
             proxy.DoBar(11).Wait();

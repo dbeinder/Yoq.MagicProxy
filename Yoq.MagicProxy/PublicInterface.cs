@@ -2,25 +2,35 @@
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
+using System.Net;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading.Tasks;
 
 namespace Yoq.MagicProxy
 {
+    public interface IMagicBackendImpl<TConnectionState>
+    {
+        /// <summary>return string to decline with message, or null to accept</summary>
+        Task<string> ValidateConnection();
+        uint ConnectionStateUInt { get; }
+        EndPoint RemoteEndPoint { get; set; }
+        X509Certificate2 ClientCertificate { get; set; }
+    }
+
     public interface IMagicConnection : INotifyPropertyChanged
     {
         bool Busy { get; }
         bool Connected { get; }
-        bool Authenticated { get; }
         int LastResponseTimeMs { get; }
         Task ConnectAsync();
         Task DisconnectAsync();
     }
 
-    public interface IMagicConnection<out TIPublic, out TIAuthenticated> : IMagicConnection
+    public interface IMagicConnection<out TInterface, out TConnectionState> : IMagicConnection
     {
-        TIPublic PublicProxy { get; }
-        TIAuthenticated AuthenticatedProxy { get; }
+        TInterface Proxy { get; }
+        TConnectionState ConnectionState { get; }
     }
 
     public class ServerSideException : Exception
@@ -28,16 +38,24 @@ namespace Yoq.MagicProxy
         public ServerSideException(string message) : base(message) { }
     }
 
-    public enum MagicMethodType
+    [AttributeUsage(AttributeTargets.Method)]
+    public class RequiredFlagsAttribute : Attribute
     {
-        Normal,
-        Authenticate,
-        CancelAuthentication
+        public uint RequiresFlags;
+        public RequiredFlagsAttribute(object flags) => RequiresFlags = Convert.ToUInt32(flags);
+    }
+    
+    [AttributeUsage(AttributeTargets.Interface)]
+    public class DefaultRequiredFlagsAttribute : Attribute
+    {
+        public uint RequiresFlags;
+        public DefaultRequiredFlagsAttribute(object flags) => RequiresFlags = Convert.ToUInt32(flags);
     }
 
-    public class MagicMethodAttribute : Attribute
+    [AttributeUsage(AttributeTargets.Method)]
+    public class SetsFlagsAttribute : Attribute
     {
-        public MagicMethodType MethodType;
-        public MagicMethodAttribute(MagicMethodType type) => MethodType = type;
+        public uint SetterMask;
+        public SetsFlagsAttribute(object setterMask) => SetterMask = Convert.ToUInt32(setterMask);
     }
 }
