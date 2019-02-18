@@ -65,7 +65,7 @@ namespace PkiTool
         {
             _ca = _ca ?? ReadWithPrivKey("ca");
             var name = ReadWithDefault("CertName", "MobileCare Licensing Root 0");
-            _licroot = new CertBuilder { SubjectName = $"CN={name}", Issuer = _ca, Intermediate = true, KeyStrength = 2048, NotAfter = NotAfter }.BuildX509();
+            _licroot = new CertBuilder { SubjectName = $"CN={name}", Issuer = _ca, KeyStrength = 2048, NotAfter = NotAfter }.BuildX509();
             File.WriteAllText("output/licroot.crt", _licroot.ExportPemCertificate());
             var pw = ReadWithDefault("PFX Password, default = none", "");
             File.WriteAllBytes($"output/licroot.pfx", _licroot.Export(X509ContentType.Pfx, pw));
@@ -76,12 +76,24 @@ namespace PkiTool
         static void CreateUserLicense()
         {
             _licroot = _licroot ?? ReadWithPrivKey("licroot");
+            var ca = new X509Certificate2("output/ca.crt");
             var site = ReadWithDefault("Site", "kpvbregenz");
             var userName = ReadWithDefault("User", "PC101");
-            var user = new CertBuilder { SubjectName = $"CN={userName},O={site}", Issuer = _licroot, KeyStrength = 2048, NotAfter = NotAfter }.BuildX509();
+            var user = new CertBuilder { SubjectName = $"CN={userName},O={site}", Intermediate = false, Issuer = _licroot, KeyStrength = 2048, NotAfter = NotAfter }.BuildX509();
             var pubLicRoot = new X509Certificate2(_licroot) { PrivateKey = null };
-            var combined = new X509Certificate2Collection(new[] { user, pubLicRoot });
+            var combined = new X509Certificate2Collection(new[] { user, pubLicRoot, ca });
             File.WriteAllBytes($"output/license-{site}-{userName}.pfx", combined.Export(X509ContentType.Pfx));
+            Console.WriteLine($"File license-{site}-{userName}.pfx written");
+        }
+
+        
+        static void CreateUserLicense2()
+        {
+            _ca = _ca ?? ReadWithPrivKey("ca");
+            var site = ReadWithDefault("Site", "kpvbregenz");
+            var userName = ReadWithDefault("User", "PC101");
+            var user = new CertBuilder { SubjectName = $"CN={userName},O={site}", Intermediate = false, Issuer = _ca, KeyStrength = 2048, NotAfter = NotAfter }.BuildX509();
+            File.WriteAllBytes($"output/license-{site}-{userName}.pfx", user.Export(X509ContentType.Pfx));
             Console.WriteLine($"File license-{site}-{userName}.pfx written");
         }
 
@@ -94,7 +106,8 @@ namespace PkiTool
                 Console.WriteLine("\n[C] ReCreate CA\n" +
                                   "[S] ReCreate server cert\n" +
                                   "[R] ReCreate licensing root\n" +
-                                  "[L] New user license");
+                                  "[L] New user license\n" +
+                                  "[X] New user license from CA");
 
                 Console.Write("Command>");
                 var inp = Console.ReadLine();
@@ -112,6 +125,9 @@ namespace PkiTool
                         break;
                     case "L":
                         CreateUserLicense();
+                        break;
+                    case "X":
+                        CreateUserLicense2();
                         break;
                 }
             }

@@ -13,11 +13,10 @@ using Newtonsoft.Json.Linq;
 
 namespace Yoq.MagicProxy
 {
-    public sealed class MagicProxyMockConnection<TInterface, TProxy, TImpl, TConnectionState>
-        : MagicProxyClientBase<TInterface, TProxy, TConnectionState>, IMagicConnection<TInterface, TConnectionState>
+    public sealed class MagicProxyMockConnection<TInterface, TImpl, TConnectionState>
+        : MagicProxyClientBase<TInterface, TConnectionState>, IMagicConnection<TInterface, TConnectionState>
         where TInterface : class
         where TImpl : class, TInterface, IMagicBackendImpl<TConnectionState>
-        where TProxy : MagicProxyBase, TInterface, new()
     {
         public TimeSpan RequestDelay = TimeSpan.Zero;
         public Action<string, string, byte[]> WireSniffer;

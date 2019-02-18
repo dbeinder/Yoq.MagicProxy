@@ -118,7 +118,7 @@ namespace Yoq.MagicProxy
                     impl.ClientCertificate = sslStream.RemoteCertificate == null ? null : new X509Certificate2(sslStream.RemoteCertificate);
                 }
                 dataStream = _useSsl ? (Stream)sslStream : tcpStream;
-                
+
                 var connError = await impl.ValidateConnection().ConfigureAwait(false);
                 var connErrorBytes = connError == null ? null : Encoding.UTF8.GetBytes(connError);
                 await dataStream.WriteMessageAsync(impl.ConnectionStateUInt, connErrorBytes, null, ct).ConfigureAwait(false);
@@ -215,8 +215,8 @@ namespace Yoq.MagicProxy
         }
     }
 
-    public abstract class MagicProxyClientBase<TInterface, TProxy, TConnectionState> : IMagicDispatcher
-        where TProxy : MagicProxyBase, TInterface, new()
+    public abstract class MagicProxyClientBase<TInterface, TConnectionState> : IMagicDispatcher
+        where TInterface : class
     {
         private readonly SemaphoreSlim _sendQueueCounter = new SemaphoreSlim(0, Int32.MaxValue);
         private readonly SemaphoreSlim _sendLock = new SemaphoreSlim(1, 1);
@@ -264,7 +264,10 @@ namespace Yoq.MagicProxy
 
         internal MagicProxyClientBase()
         {
-            Proxy = new TProxy { MagicDispatcher = this };
+            var type = MagicProxyHelper.CompileProxy<TInterface>();
+            var proxy = Activator.CreateInstance(type);
+            ((MagicProxyBase)proxy).MagicDispatcher = this;
+            Proxy = (TInterface)proxy;
             MethodTable = MagicProxyHelper.ReadInterfaceMethods<TInterface, MethodEntry>();
         }
 
@@ -308,9 +311,9 @@ namespace Yoq.MagicProxy
         }
     }
 
-    public sealed class MagicProxyClient<TInterface, TProxy, TConnectionState>
-        : MagicProxyClientBase<TInterface, TProxy, TConnectionState>, IMagicConnection<TInterface, TConnectionState>
-        where TProxy : MagicProxyBase, TInterface, new()
+    public sealed class MagicProxyClient<TInterface, TConnectionState>
+        : MagicProxyClientBase<TInterface, TConnectionState>, IMagicConnection<TInterface, TConnectionState>
+        where TInterface : class
     {
         private readonly bool _useSsl;
         private readonly int _port;

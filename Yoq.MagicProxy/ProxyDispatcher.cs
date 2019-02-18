@@ -16,25 +16,11 @@ namespace Yoq.MagicProxy
     public abstract class MagicProxyBase
     {
         internal IMagicDispatcher MagicDispatcher;
+        
+        protected internal JArray Params(params object[] args)
+             => new JArray(args.Select(a => a == null ? null : JToken.FromObject(a, MagicProxySettings.Serializer)).ToArray<object>());
 
-        protected Task Request(JArray jArgs, [CallerMemberName]string method = "")
-            => RequestInternal<int>(method, NoParams, jArgs);
-
-        protected Task<TReturn> Request<TReturn>(JArray jArgs, [CallerMemberName]string method = "")
-            => RequestInternal<TReturn>(method, NoParams, jArgs);
-
-
-        protected Task RequestGeneric<TGeneric>(JArray jArgs, [CallerMemberName]string method = "")
-            => RequestInternal<int>(method, Params(typeof(TGeneric).FullName), jArgs);
-
-        protected Task<TReturn> RequestGeneric<TGeneric, TReturn>(JArray jArgs, [CallerMemberName]string method = "")
-            => RequestInternal<TReturn>(method, Params(typeof(TGeneric).FullName), jArgs);
-
-        protected readonly JArray NoParams = new JArray();
-        protected JArray Params(params object[] args)
-            => new JArray(args.Select(a => a == null ? null : JToken.FromObject(a, MagicProxySettings.Serializer)).ToArray<object>());
-
-        private async Task<TReturn> RequestInternal<TReturn>(string method, JArray tArgs, JArray jArgs)
+        protected internal async Task<TReturn> RequestInternal<TReturn>(string method, JArray tArgs, JArray jArgs)
         {
             if (MagicDispatcher == null)
                 throw new Exception("MagicProxySerializer must not be used before setting up MagicProxyServer");

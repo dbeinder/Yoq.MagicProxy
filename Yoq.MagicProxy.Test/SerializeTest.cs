@@ -19,7 +19,7 @@ namespace Yoq.MagicProxy.Test
             MagicProxySettings.TypeSearchAssemblies.Add(typeof(Stopwatch).Assembly);
 
             var impl = new FullBackendImpl();
-            var mock = new MagicProxyMockConnection<IBackend, BackendProxy, FullBackendImpl, ConnectionFlags>(impl);
+            var mock = new MagicProxyMockConnection<IBackend, FullBackendImpl, ConnectionFlags>(impl);
 
             //display line data
             mock.WireSniffer = (req, err, resp) =>

@@ -45,7 +45,7 @@ namespace Yoq.MagicProxy.Test
             MagicProxySettings.TypeSearchAssemblies.Add(typeof(LolClass).Assembly);
             var impl = new FullBackendImpl();
             var server = new MagicProxyServer<IBackend, FullBackendImpl, ConnectionFlags>(() => impl, _port, serverPrivCert, caCert);
-            var client = new MagicProxyClient<IBackend, BackendProxy, ConnectionFlags>("localhost", _port, caCert, clientPrivCert);
+            var client = new MagicProxyClient<IBackend, ConnectionFlags>("localhost", _port, caCert, clientPrivCert);
 
             server.StartServer();
             Thread.Sleep(100);
@@ -105,7 +105,7 @@ namespace Yoq.MagicProxy.Test
             {
                 return Task.Run(async () =>
                 {
-                    var proxy = new MagicProxyClient<IBackend, BackendProxy, ConnectionFlags>("localhost", _port, caCert, clientPrivCert);
+                    var proxy = new MagicProxyClient<IBackend, ConnectionFlags>("localhost", _port, caCert, clientPrivCert);
                     await proxy.ConnectAsync();
                     for (var n = repeats; n > 0; n--)
                         await proxy.Proxy.Foo(n);

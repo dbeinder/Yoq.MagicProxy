@@ -45,27 +45,7 @@ namespace Yoq.MagicProxy.Test
 
     public class LolClass { public string Member = "FooBar"; }
     public class LolDerived : LolClass { public string AddlMember = "FFFXX"; }
-
-    public class BackendProxy : MagicProxyBase, IBackend
-    {
-        public Task<bool> ClientUpdateRequired(int clientVersion) => Request<bool>(Params(clientVersion));
-        public Task<bool> Authenticate(string user, string password) => Request<bool>(Params(user, password));
-        public Task Logout() => Request(NoParams);
-
-        public Task SimpleAction() => Request(NoParams);
-        public Task<DateTimeOffset> DateTest(DateTime dt, DateTimeOffset dto) => Request<DateTimeOffset>(Params(dt, dto));
-        public Task SimpleThrows() => Request(NoParams);
-        public Task DoBar(int x) => Request(Params(x));
-        public Task<double> Foo(int x) => Request<double>(Params(x));
-        public Task<byte[]> GetRaw(int count) => Request<byte[]>(Params(count));
-        public Task Update<T>(T data) => RequestGeneric<T>(Params(data));
-        public Task<T> GetFromDb<T>(int y) where T : new() => RequestGeneric<T, T>(Params(y));
-        public Task<T> GetNull<T>() => RequestGeneric<T, T>(NoParams);
-
-        public Task<List<T>> Nested<T>() where T : new() => RequestGeneric<T, List<T>>(NoParams);
-
-    }
-
+    
     public class FullBackendImpl : IBackend, IMagicBackendImpl<ConnectionFlags>
     {
         protected ConnectionFlags ConnectionState = ConnectionFlags.None;
