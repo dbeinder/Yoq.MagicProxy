@@ -19,7 +19,7 @@ namespace Yoq.MagicProxy
             sslPolicyErrors &= ~SslPolicyErrors.RemoteCertificateChainErrors;
             if (sslPolicyErrors != SslPolicyErrors.None) throw new AuthenticationException($"Policy Errors: [{sslPolicyErrors}]");
 
-            if (ca == null) throw new AuthenticationException($"No CA!");
+            if (ca == null) throw new AuthenticationException($"No CA provided!");
             if (chain == null || chain.ChainElements.Count == 0) throw new AuthenticationException($"Empty Chain [{chain?.ChainElements?.Count}]");
 
             var clientCert = chain.ChainElements[0].Certificate;
@@ -27,7 +27,10 @@ namespace Yoq.MagicProxy
             for (var n = 1; n < chain.ChainElements.Count; n++) intermediates[n - 1] = chain.ChainElements[n].Certificate;
 
             //verify custom CA
-            return Utility.VerifyCert(clientCert, true, X509RevocationMode.NoCheck, ca, intermediates);
+            if(!Utility.VerifyCert(clientCert, true, X509RevocationMode.NoCheck, ca, intermediates))
+                throw new AuthenticationException("Certificate is not a valid leaf of CA");
+
+            return true;
         }
 
         internal static Dictionary<string, T> ReadInterfaceMethods<TInterface, T>(Action<T> populateAction = null) where T : MethodEntry, new()
@@ -57,7 +60,20 @@ namespace Yoq.MagicProxy
                 });
 
             foreach (var me in methods.Values)
+            {
+                if (!typeof(Task).IsAssignableFrom(me.MethodInfo.ReturnType))
+                    throw new ArgumentException($"method {me.MethodInfo.Name} does not return Task/Task<T>");
+
+                var invalidParams = me.MethodInfo.GetParameters()
+                    .Where(p => p.ParameterType.IsByRef || p.ParameterType.IsPointer)
+                    .Select(p => $"{p.ParameterType.Name} {p.Name}")
+                    .ToList();
+
+                if (invalidParams.Count > 0)
+                    throw new ArgumentException($"{me.MethodInfo.Name} contains invalid ref/out/pointer parameters: {string.Join(", ", invalidParams)}");
+
                 populateAction?.Invoke(me);
+            }
 
             return methods;
         }
@@ -77,7 +93,7 @@ namespace Yoq.MagicProxy
             var ifType = typeof(TInterface);
             tb.AddInterfaceImplementation(ifType);
             tb.DefineDefaultConstructor(MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName);
-            
+
             var methods = ifType.GetMethods();
             foreach (var mi in methods)
             {

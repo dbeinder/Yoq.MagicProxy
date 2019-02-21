@@ -3,11 +3,13 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Reflection;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Common.Logging;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Yoq.MagicProxy.Test
@@ -31,6 +33,8 @@ namespace Yoq.MagicProxy.Test
         [TestMethod]
         public void Test()
         {
+            LogManager.Adapter = new Common.Logging.Simple.ConsoleOutLoggerFactoryAdapter(LogLevel.Info, true, true, true, "dd.MM 'UTC'z HH:mm:ss");
+
             var caCert = new X509Certificate2(ReadEmbedded("ca.crt"));
             var serverPrivCert = new X509Certificate2(ReadEmbedded("server.pfx"));
             var clientCertBundle = new X509Certificate2Collection();
@@ -43,8 +47,11 @@ namespace Yoq.MagicProxy.Test
             certStore.Close();
 
             MagicProxySettings.TypeSearchAssemblies.Add(typeof(LolClass).Assembly);
+
+            var logger = LogManager.GetLogger("ProxyServer");
+
             var impl = new FullBackendImpl();
-            var server = new MagicProxyServer<IBackend, FullBackendImpl, ConnectionFlags>(() => impl, _port, serverPrivCert, caCert);
+            var server = new MagicProxyServer<IBackend, FullBackendImpl, ConnectionFlags>(() => impl, new IPEndPoint(IPAddress.Any, _port), logger, serverPrivCert, caCert);
             var client = new MagicProxyClient<IBackend, ConnectionFlags>("localhost", _port, caCert, clientPrivCert);
 
             server.StartServer();
