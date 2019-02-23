@@ -9,10 +9,10 @@ using System.Threading.Tasks;
 
 namespace Yoq.MagicProxy
 {
-    public interface IMagicBackendImpl<TConnectionState>
+    public interface IMagicInterfaceImpl<TConnectionState>
     {
         /// <summary>return string to decline with message, or null to accept</summary>
-        Task<string> ValidateConnection();
+        Task<string> ApproveConnection();
         uint ConnectionStateUInt { get; }
         EndPoint RemoteEndPoint { get; set; }
         X509Certificate2 ClientCertificate { get; set; }
@@ -50,12 +50,5 @@ namespace Yoq.MagicProxy
     {
         public uint RequiresFlags;
         public DefaultRequiredFlagsAttribute(object flags) => RequiresFlags = Convert.ToUInt32(flags);
-    }
-
-    [AttributeUsage(AttributeTargets.Method)]
-    public class SetsFlagsAttribute : Attribute
-    {
-        public uint SetterMask;
-        public SetsFlagsAttribute(object setterMask) => SetterMask = Convert.ToUInt32(setterMask);
     }
 }

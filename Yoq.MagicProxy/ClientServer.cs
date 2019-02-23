@@ -21,7 +21,7 @@ namespace Yoq.MagicProxy
 {
     public sealed class MagicProxyServer<TInterface, TImpl, TConnectionState>
         where TInterface : class
-        where TImpl : class, TInterface, IMagicBackendImpl<TConnectionState>
+        where TImpl : class, TInterface, IMagicInterfaceImpl<TConnectionState>
     {
         public bool Logging = false;
         private readonly bool _useSsl;
@@ -122,7 +122,7 @@ namespace Yoq.MagicProxy
                 }
                 dataStream = _useSsl ? (Stream)sslStream : tcpStream;
 
-                var connError = await impl.ValidateConnection().ConfigureAwait(false);
+                var connError = await impl.ApproveConnection().ConfigureAwait(false);
                 var connErrorBytes = connError == null ? null : Encoding.UTF8.GetBytes(connError);
                 await dataStream.WriteMessageAsync(impl.ConnectionStateUInt, connErrorBytes, null, ct).ConfigureAwait(false);
                 if (connError != null)

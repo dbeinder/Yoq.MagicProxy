@@ -46,7 +46,7 @@ namespace Yoq.MagicProxy.Test
     public class LolClass { public string Member = "FooBar"; }
     public class LolDerived : LolClass { public string AddlMember = "FFFXX"; }
     
-    public class FullBackendImpl : IBackend, IMagicBackendImpl<ConnectionFlags>
+    public class FullBackendImpl : IBackend, IMagicInterfaceImpl<ConnectionFlags>
     {
         protected ConnectionFlags ConnectionState = ConnectionFlags.None;
         public uint ConnectionStateUInt => (uint)ConnectionState;
@@ -100,7 +100,7 @@ namespace Yoq.MagicProxy.Test
             return Task.FromResult(goodLogin);
         }
 
-        public Task<string> ValidateConnection()
+        public Task<string> ApproveConnection()
         {
             string error = null;
             if (ClientCertificate == null)
