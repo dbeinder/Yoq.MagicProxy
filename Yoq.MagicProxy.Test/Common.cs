@@ -111,6 +111,10 @@ namespace Yoq.MagicProxy.Test
             return Task.FromResult(error);
         }
 
+        public string ConnectionId => ClientCertificate?.Subject 
+                                      ?? RemoteEndPoint?.ToString() 
+                                      ?? "new connection";
+
         public Task Logout() => Task.FromResult(ConnectionFlags.None);
     }
 }

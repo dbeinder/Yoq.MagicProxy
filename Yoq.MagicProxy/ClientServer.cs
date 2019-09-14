@@ -98,15 +98,16 @@ namespace Yoq.MagicProxy
 
         private async void ClientConnection(TcpClient client, CancellationToken ct)
         {
-            var clientEndPoint = client?.Client?.RemoteEndPoint;
             var impl = _implFactory();
-            impl.RemoteEndPoint = clientEndPoint;
-
             SslStream sslStream = null;
             Stream dataStream = null;
+
             try
             {
-                _log.Info(m => m($"[{clientEndPoint}] Client connected"));
+                if (client?.Client == null) return;
+                
+                impl.RemoteEndPoint = client.Client?.RemoteEndPoint;
+                _log.Info(m => m($"[{impl.ConnectionId}] Client connected"));
 
                 var tcpStream = client.GetStream();
                 tcpStream.ReadTimeout = 5000;
@@ -116,7 +117,7 @@ namespace Yoq.MagicProxy
                 {
                     sslStream = new SslStream(tcpStream, false, UserCertificateValidationCallback, null, EncryptionPolicy.RequireEncryption);
                     await sslStream.AuthenticateAsServerAsync(_serverCertificate, true, false).ConfigureAwait(false);
-                    _log.Debug(m => m($"[{clientEndPoint}] SSL: {sslStream.SslProtocol}, {sslStream.CipherAlgorithm}, {sslStream.HashAlgorithm}, {sslStream.KeyExchangeAlgorithm}"));
+                    _log.Debug(m => m($"[{impl.ConnectionId}] SSL: {sslStream.SslProtocol}, {sslStream.CipherAlgorithm}, {sslStream.HashAlgorithm}, {sslStream.KeyExchangeAlgorithm}"));
                     if (!sslStream.IsSigned || !sslStream.IsEncrypted) throw new Exception("Non secure connection");
                     impl.ClientCertificate = sslStream.RemoteCertificate == null ? null : new X509Certificate2(sslStream.RemoteCertificate);
                 }
@@ -127,7 +128,7 @@ namespace Yoq.MagicProxy
                 await dataStream.WriteMessageAsync(impl.ConnectionStateUInt, connErrorBytes, null, ct).ConfigureAwait(false);
                 if (connError != null)
                 {
-                    _log.Info(m => m($"[{clientEndPoint}] Client declined by Impl: {connError}"));
+                    _log.Info(m => m($"[{impl.ConnectionId}] Client declined by Impl: {connError}"));
                     return;
                 }
 
@@ -159,12 +160,12 @@ namespace Yoq.MagicProxy
                             if (!_methodTable.TryGetValue(method, out var methodEntry))
                             {
                                 errMsg = $"Method [{method}] not found";
-                                _log.Warn($"[{clientEndPoint}] " + errMsg);
+                                _log.Warn($"[{impl.ConnectionId}] " + errMsg);
                             }
                             else if ((methodEntry.RequiredFlags & ~impl.ConnectionStateUInt) is var missing && missing > 0)
                             {
                                 errMsg = $"Method [{method}] is not allowed, state(s) missing: [{(TConnectionState)(object)missing}]";
-                                _log.Warn($"[{clientEndPoint}] " + errMsg);
+                                _log.Warn($"[{impl.ConnectionId}] " + errMsg);
                             }
                             else
                             {
@@ -181,14 +182,14 @@ namespace Yoq.MagicProxy
                                 else
                                 {
                                     errMsg = "Impl Exception: " + err;
-                                    _log.Error($"[{clientEndPoint}] " + errMsg);
+                                    _log.Error($"[{impl.ConnectionId}] " + errMsg);
                                 }
                             }
                         }
                         catch (Exception e)
                         {
                             errMsg = "Parse/Dispatch Exception " + e;
-                            _log.Error($"[{clientEndPoint}] " + errMsg);
+                            _log.Error($"[{impl.ConnectionId}] " + errMsg);
                         }
                     }
 
@@ -197,7 +198,7 @@ namespace Yoq.MagicProxy
                     await dataStream.WriteMessageAsync(impl.ConnectionStateUInt, errData, responseData, ct).ConfigureAwait(false);
                     sw1.Stop();
 
-                    _log.Debug($"[{clientEndPoint}] run:{(dbgExecTime + "ms"),6} tx:{(sw1.ElapsedMilliseconds + "ms"),6} {dbgQuery}");
+                    _log.Debug($"[{impl.ConnectionId}] run:{(dbgExecTime + "ms"),6} tx:{(sw1.ElapsedMilliseconds + "ms"),6} {dbgQuery}");
                 }
             }
             catch (Exception e)
@@ -208,11 +209,11 @@ namespace Yoq.MagicProxy
                     case System.IO.IOException x:
                         return;
                 }
-                _log.Error($"[{clientEndPoint}] Connection Exception: " + e);
+                _log.Error($"[{impl.ConnectionId}] Connection Exception: " + e);
             }
             finally
             {
-                _log.Info(m => m($"[{clientEndPoint}] Client disconnected"));
+                _log.Info(m => m($"[{impl.ConnectionId}] Client disconnected"));
                 dataStream?.Close();
                 client.Close();
             }

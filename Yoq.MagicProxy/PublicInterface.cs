@@ -16,6 +16,7 @@ namespace Yoq.MagicProxy
         uint ConnectionStateUInt { get; }
         EndPoint RemoteEndPoint { get; set; }
         X509Certificate2 ClientCertificate { get; set; }
+        string ConnectionId { get; }
     }
 
     public interface IMagicConnection : INotifyPropertyChanged
