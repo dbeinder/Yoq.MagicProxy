@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -29,29 +30,43 @@ namespace Yoq.MagicProxy
         private readonly IMagicDispatcher<TInterface> _dispatcher;
         private readonly Func<TImpl> _implFactory;
 
-        private readonly X509Certificate2 _serverCertificate;
+        private readonly ConcurrentDictionary<string, X509Certificate2> _serverCerts = new ConcurrentDictionary<string, X509Certificate2>();
         private readonly X509Certificate2 _clientCa;
         private readonly IPEndPoint _listenEndPoint;
+        private readonly SslServerAuthenticationOptions _sslAuthOptions;
 
         private Task _serverLoop;
         private CancellationTokenSource _cancelSource;
         private readonly IReadOnlyDictionary<string, MethodEntry> _methodTable;
 
-        /// <param name="serverPrivCert">If null, MagicProxy uses a plaintext TCP connection</param>
+        /// <param name="serverCerts">If null, MagicProxy uses a plaintext TCP connection</param>
         /// <param name="clientCa">If null, the client certificate is not verified</param>
-        public MagicProxyServer(Func<TImpl> implFactory, IPEndPoint listenEndPoint, ILog log = null, X509Certificate2 serverPrivCert = null, X509Certificate2 clientCa = null)
+        public MagicProxyServer(Func<TImpl> implFactory, IPEndPoint listenEndPoint, ILog log = null, IEnumerable<X509Certificate2> serverCerts = null, X509Certificate2 clientCa = null)
         {
             _methodTable = MagicProxyHelper.ReadInterfaceMethods<TInterface, MethodEntry>();
             _dispatcher = new MagicDispatcher<TInterface>();
             _implFactory = implFactory;
             _listenEndPoint = listenEndPoint;
             _log = log ?? new Common.Logging.Simple.NoOpLogger();
-            if (serverPrivCert != null)
+            if (serverCerts != null || !serverCerts.Any())
             {
-                if (!serverPrivCert.HasPrivateKey) throw new ArgumentException("server certificate need private key");
+                foreach (var cert in serverCerts)
+                {
+                    if (!cert.HasPrivateKey) throw new ArgumentException($"server certificate {cert} need private key");
+                    var dnsName = cert.GetNameInfo(X509NameType.DnsName, false);
+                    if (string.IsNullOrWhiteSpace(dnsName)) throw new ArgumentException($"server certificate {cert} has no DNS name");
+                    if (!_serverCerts.TryAdd(dnsName, cert)) throw new ArgumentException($"two certificates for {dnsName} provided");
+                }
                 _useSsl = true;
-                _serverCertificate = serverPrivCert;
                 _clientCa = clientCa;
+                var fallbackCert = serverCerts.First();
+                _sslAuthOptions = new SslServerAuthenticationOptions
+                {
+                    ServerCertificateSelectionCallback = (sslStream, hostname) => hostname == null || !_serverCerts.TryGetValue(hostname, out var c) ? fallbackCert : c,
+                    ClientCertificateRequired = true,
+                    CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
+                    EncryptionPolicy = EncryptionPolicy.RequireEncryption
+                };
             }
         }
 
@@ -105,7 +120,7 @@ namespace Yoq.MagicProxy
             try
             {
                 if (client?.Client == null) return;
-                
+
                 impl.RemoteEndPoint = client.Client?.RemoteEndPoint;
                 _log.Info(m => m($"[{impl.ConnectionId}] Client connected"));
 
@@ -116,7 +131,7 @@ namespace Yoq.MagicProxy
                 if (_useSsl)
                 {
                     sslStream = new SslStream(tcpStream, false, UserCertificateValidationCallback, null, EncryptionPolicy.RequireEncryption);
-                    await sslStream.AuthenticateAsServerAsync(_serverCertificate, true, false).ConfigureAwait(false);
+                    await sslStream.AuthenticateAsServerAsync(_sslAuthOptions, ct).ConfigureAwait(false);
                     _log.Debug(m => m($"[{impl.ConnectionId}] SSL: {sslStream.SslProtocol}, {sslStream.CipherAlgorithm}, {sslStream.HashAlgorithm}, {sslStream.KeyExchangeAlgorithm}"));
                     if (!sslStream.IsSigned || !sslStream.IsEncrypted) throw new Exception("Non secure connection");
                     impl.ClientCertificate = sslStream.RemoteCertificate == null ? null : new X509Certificate2(sslStream.RemoteCertificate);

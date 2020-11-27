@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
@@ -47,7 +46,7 @@ namespace Yoq.MagicProxy
         {
             var typeSignature = $"CompiledProxy_{typeof(TInterface).Name}";
             var an = new AssemblyName(typeSignature);
-            var assemblyBuilder = AppDomain.CurrentDomain.DefineDynamicAssembly(an, AssemblyBuilderAccess.Run); // | AssemblyBuilderAccess.Save);
+            var assemblyBuilder = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName(Guid.NewGuid().ToString()), AssemblyBuilderAccess.Run); // | AssemblyBuilderAccess.Save);
             var moduleBuilder = assemblyBuilder.DefineDynamicModule("MainModule");//, "dyn.dll");
             var tb = moduleBuilder.DefineType(typeSignature,
                 TypeAttributes.Public |
