@@ -26,7 +26,7 @@ namespace Yoq.MagicProxy
         public bool Logging = false;
         private readonly bool _useSsl;
         private readonly ILog _log;
-        private readonly IMagicDispatcherRaw<TInterface> _dispatcher;
+        private readonly IMagicDispatcher<TInterface> _dispatcher;
         private readonly Func<TImpl> _implFactory;
 
         private readonly X509Certificate2 _serverCertificate;
@@ -35,7 +35,7 @@ namespace Yoq.MagicProxy
 
         private Task _serverLoop;
         private CancellationTokenSource _cancelSource;
-        private readonly Dictionary<string, MethodEntry> _methodTable;
+        private readonly IReadOnlyDictionary<string, MethodEntry> _methodTable;
 
         /// <param name="serverPrivCert">If null, MagicProxy uses a plaintext TCP connection</param>
         /// <param name="clientCa">If null, the client certificate is not verified</param>
@@ -170,14 +170,14 @@ namespace Yoq.MagicProxy
                             else
                             {
                                 var sw = Stopwatch.StartNew();
-                                var (err, res) = await _dispatcher.DoRequestRaw(impl, method, tArgs, args).ConfigureAwait(false);
+                                var (err, res) = await _dispatcher.ExecuteRequest(impl, method, tArgs, args).ConfigureAwait(false);
                                 sw.Stop();
                                 dbgExecTime = sw.ElapsedMilliseconds;
                                 dbgQuery = method;
 
                                 if (err == null)
                                 {
-                                    responseData = _dispatcher.Serialize(res);
+                                    responseData = _dispatcher.SerializeResponse(res);
                                 }
                                 else
                                 {
@@ -226,7 +226,7 @@ namespace Yoq.MagicProxy
         }
     }
 
-    public abstract class MagicProxyClientBase<TInterface, TConnectionState> : IMagicDispatcher
+    public abstract class MagicProxyClientBase<TInterface, TConnectionState> : IMagicProxyClient, IMagicConnection<TInterface, TConnectionState>
         where TInterface : class
     {
         private readonly SemaphoreSlim _sendQueueCounter = new SemaphoreSlim(0, Int32.MaxValue);
@@ -234,7 +234,7 @@ namespace Yoq.MagicProxy
 
         public event PropertyChangedEventHandler PropertyChanged;
 
-        internal readonly Dictionary<string, MethodEntry> MethodTable;
+        internal readonly IReadOnlyDictionary<string, MethodEntry> MethodTable;
         public TInterface Proxy { get; }
 
         private bool _busy, _connected;
@@ -275,10 +275,7 @@ namespace Yoq.MagicProxy
 
         internal MagicProxyClientBase()
         {
-            var type = MagicProxyHelper.CompileProxy<TInterface>();
-            var proxy = Activator.CreateInstance(type);
-            ((MagicProxyBase)proxy).MagicDispatcher = this;
-            Proxy = (TInterface)proxy;
+            Proxy = MagicCompiledProxy.GenerateProxy<TInterface>(this);
             MethodTable = MagicProxyHelper.ReadInterfaceMethods<TInterface, MethodEntry>();
         }
 
@@ -312,7 +309,7 @@ namespace Yoq.MagicProxy
 
         protected abstract Task<(string, byte[])> DoRequestImpl(string request);
 
-        Task<(string, byte[])> IMagicDispatcher.DoRequest(string method, JArray tArgs, JArray args)
+        Task<(string, byte[])> IMagicProxyClient.RemoteRequest(string method, JArray tArgs, JArray args)
         {
             var required = MethodTable[method].RequiredFlags;
             var missing = required & ~_connectionStateUint;
@@ -323,7 +320,7 @@ namespace Yoq.MagicProxy
     }
 
     public sealed class MagicProxyClient<TInterface, TConnectionState>
-        : MagicProxyClientBase<TInterface, TConnectionState>, IMagicConnection<TInterface, TConnectionState>
+        : MagicProxyClientBase<TInterface, TConnectionState>
         where TInterface : class
     {
         private readonly bool _useSsl;

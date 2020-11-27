@@ -14,10 +14,17 @@ namespace Yoq.MagicProxy.Test
     public class ProxyCompilerTest
     {
         [TestMethod]
-        public void Test()
+        public async Task Test()
         {
-            var t = MagicProxyHelper.CompileProxy<ITest>();
-            var obj = Activator.CreateInstance(t);
+            var obj = MagicCompiledProxy.GenerateProxy<ITest>(null);
+            try
+            {
+                await obj.Foo(99);
+            }
+            catch (Exception e)
+            {
+
+            }
         }
     }
 

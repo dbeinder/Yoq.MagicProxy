@@ -52,11 +52,12 @@
   <ItemGroup>
     <Compile Include="ClientServerMock.cs" />
     <Compile Include="ClientServerProtocol.cs" />
+    <Compile Include="CompiledProxy.cs" />
     <Compile Include="Helper.cs" />
     <Compile Include="PublicInterface.cs" />
     <Compile Include="ClientServer.cs" />
     <Compile Include="Settings.cs" />
-    <Compile Include="ProxyDispatcher.cs" />
+    <Compile Include="Dispatcher.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
@@ -71,6 +72,7 @@
     </PackageReference>
   </ItemGroup>
   <ItemGroup>
+    <None Include="Structure.cd" />
     <None Include="Yoq.MagicProxy.nuspec" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

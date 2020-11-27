@@ -1,0 +1,107 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<ClassDiagram MajorVersion="1" MinorVersion="1">
+  <Class Name="Yoq.MagicProxy.MagicDispatcher&lt;TInterface&gt;" Collapsed="true">
+    <Position X="0.75" Y="3.5" Width="2.25" />
+    <Compartments>
+      <Compartment Name="Nested Types" Collapsed="false" />
+    </Compartments>
+    <NestedTypes>
+      <Class Name="Yoq.MagicProxy.MagicDispatcher&lt;TInterface&gt;.DispatcherMethodEntry" Collapsed="true">
+        <TypeIdentifier>
+          <NewMemberFileName>Dispatcher.cs</NewMemberFileName>
+        </TypeIdentifier>
+      </Class>
+      <Delegate Name="Yoq.MagicProxy.MagicDispatcher&lt;TInterface&gt;.CompiledLambda" Collapsed="true">
+        <TypeIdentifier>
+          <NewMemberFileName>Dispatcher.cs</NewMemberFileName>
+        </TypeIdentifier>
+      </Delegate>
+    </NestedTypes>
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAABAAAAABAAAAAAAAAAUCBAAAAAAAAAAAAA=</HashCode>
+      <FileName>Dispatcher.cs</FileName>
+    </TypeIdentifier>
+    <Lollipop Position="0.2" />
+  </Class>
+  <Class Name="Yoq.MagicProxy.MagicDispatcherBase" Collapsed="true">
+    <Position X="3.25" Y="3.5" Width="2.25" />
+    <TypeIdentifier>
+      <HashCode>AAAAEAAAAIAAAAAQAAAAgAAAAABAAAAAAAAQQAAAAAA=</HashCode>
+      <FileName>Dispatcher.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="Yoq.MagicProxy.MagicProxyServer&lt;TInterface, TImpl, TConnectionState&gt;" Collapsed="true">
+    <Position X="0.5" Y="1.5" Width="5.25" />
+    <Compartments>
+      <Compartment Name="Methods" Collapsed="true" />
+    </Compartments>
+    <TypeIdentifier>
+      <HashCode>EEEAAAABAIIBAUAggAgAAAAAQIAAAQAAAAAAAAAAAEA=</HashCode>
+      <FileName>ClientServer.cs</FileName>
+    </TypeIdentifier>
+    <ShowAsAssociation>
+      <Field Name="_dispatcher" />
+    </ShowAsAssociation>
+  </Class>
+  <Class Name="Yoq.MagicProxy.MagicProxyMockConnection&lt;TInterface, TConnectionState&gt;" Collapsed="true">
+    <Position X="8.75" Y="6" Width="4.25" />
+    <TypeIdentifier>
+      <HashCode>AABEAAAAACAAAQAAAAAAAEAABAgAAAAAAIAAAAAAAAA=</HashCode>
+      <FileName>ClientServerMock.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="Yoq.MagicProxy.MagicProxyClientBase&lt;TInterface, TConnectionState&gt;" Collapsed="true">
+    <Position X="6.5" Y="4.5" Width="3.5" />
+    <TypeIdentifier>
+      <HashCode>ACAMAAAADCACwQEUAAAAgAEAgAgAAAAAAAAIgAAAQAE=</HashCode>
+      <FileName>ClientServer.cs</FileName>
+    </TypeIdentifier>
+    <Lollipop Position="0.2" />
+  </Class>
+  <Class Name="Yoq.MagicProxy.MagicProxyClient&lt;TInterface, TConnectionState&gt;" Collapsed="true">
+    <Position X="8.75" Y="5.25" Width="4.25" />
+    <TypeIdentifier>
+      <HashCode>AAAEAAAAACAEEAgAAAiAAAAAAAgABAAAAAQQAIAAAEA=</HashCode>
+      <FileName>ClientServer.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="Yoq.MagicProxy.MagicCompiledProxy" Collapsed="true">
+    <Position X="6.5" Y="1.5" Width="2.25" />
+    <TypeIdentifier>
+      <HashCode>AAAQIAIDAAAAAAAAAAgAAAAAAAAQIQAQAAAAAAAAAQA=</HashCode>
+      <FileName>CompiledProxy.cs</FileName>
+    </TypeIdentifier>
+    <ShowAsAssociation>
+      <Field Name="MagicProxyClient" />
+    </ShowAsAssociation>
+  </Class>
+  <Interface Name="Yoq.MagicProxy.IMagicDispatcher&lt;TInterface&gt;" Collapsed="true">
+    <Position X="1.25" Y="2.5" Width="3" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAACAAAAAAAAAAAAAAAAAAAAAgAAAAAAA=</HashCode>
+      <FileName>Dispatcher.cs</FileName>
+    </TypeIdentifier>
+  </Interface>
+  <Interface Name="Yoq.MagicProxy.IMagicConnection&lt;TInterface, TConnectionState&gt;" Collapsed="true">
+    <Position X="6.5" Y="3.25" Width="3.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE=</HashCode>
+      <FileName>PublicInterface.cs</FileName>
+    </TypeIdentifier>
+  </Interface>
+  <Interface Name="Yoq.MagicProxy.IMagicConnection" Collapsed="true">
+    <Position X="10.25" Y="3.25" Width="2.75" />
+    <TypeIdentifier>
+      <HashCode>AAAEAAAABAAAQAAEAAAAAAAAAAgAAAAAAAAAAAAAAAA=</HashCode>
+      <FileName>PublicInterface.cs</FileName>
+    </TypeIdentifier>
+  </Interface>
+  <Interface Name="Yoq.MagicProxy.IMagicProxyClient" Collapsed="true">
+    <Position X="6.5" Y="2.5" Width="2" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAAAAAA=</HashCode>
+      <FileName>CompiledProxy.cs</FileName>
+    </TypeIdentifier>
+  </Interface>
+  <Font Name="Segoe UI" Size="9" />
+</ClassDiagram>

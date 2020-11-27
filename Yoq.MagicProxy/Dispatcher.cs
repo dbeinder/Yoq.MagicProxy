@@ -13,52 +13,29 @@ using Newtonsoft.Json.Linq;
 
 namespace Yoq.MagicProxy
 {
-    public abstract class MagicProxyBase
+    internal interface IMagicDispatcher<in TInterface>
     {
-        internal IMagicDispatcher MagicDispatcher;
-        
-        protected internal JArray Params(params object[] args)
-             => new JArray(args.Select(a => a == null ? null : JToken.FromObject(a, MagicProxySettings.Serializer)).ToArray<object>());
-
-        protected internal async Task<TReturn> RequestInternal<TReturn>(string method, JArray tArgs, JArray jArgs)
-        {
-            if (MagicDispatcher == null)
-                throw new Exception("MagicProxySerializer must not be used before setting up MagicProxyServer");
-
-            var (err, respData) = await MagicDispatcher.DoRequest(method, tArgs, jArgs).ConfigureAwait(false);
-            if (err != null) throw new ServerSideException(err);
-
-            return typeof(TReturn) == typeof(byte[])
-                ? (TReturn)(object)respData
-                : JsonConvert.DeserializeObject<TReturn>(Encoding.UTF8.GetString(respData), MagicProxySettings.SerializerSettings);
-        }
+        Task<(string, object)> ExecuteRequest(TInterface impl, string method, JArray tArgs, JArray args);
+        byte[] SerializeResponse(object response);
     }
 
-    internal interface IMagicDispatcher
-    {
-        Task<(string, byte[])> DoRequest(string method, JArray tArgs, JArray args);
-    }
-
-    internal interface IMagicDispatcherRaw<in TInterface>
-    {
-        Task<(string, object)> DoRequestRaw(TInterface impl, string method, JArray tArgs, JArray args);
-        byte[] Serialize(object response);
-    }
-
-    internal class MagicDispatcher
+    //TODO: maybe move to helper? the only reason for inheriting is, it saves typing out the class name
+    abstract internal class MagicDispatcherBase
     {
         protected static PropertyInfo JArrayIndexer = typeof(JArray).GetProperty("Item", typeof(JToken), new[] { typeof(int) });
-        protected static MethodInfo GenericDeSerialize = typeof(MagicDispatcher).GetMethod(nameof(DeSerialize), BindingFlags.Static | BindingFlags.NonPublic);
-        protected static MethodInfo GenericToObjectAsync = typeof(MagicDispatcher).GetMethod(nameof(ToObjectAsync), BindingFlags.Static | BindingFlags.NonPublic);
-        protected static MethodInfo GenericToObjectAsyncVoid = typeof(MagicDispatcher).GetMethod(nameof(ToObjectAsyncVoid), BindingFlags.Static | BindingFlags.NonPublic);
+        protected static MethodInfo GenericDeSerialize = typeof(MagicDispatcherBase).GetMethod(nameof(DeSerialize), BindingFlags.Static | BindingFlags.NonPublic);
+        protected static MethodInfo GenericToObjectAsync = typeof(MagicDispatcherBase).GetMethod(nameof(ToObjectAsync), BindingFlags.Static | BindingFlags.NonPublic);
+        protected static MethodInfo GenericToObjectAsyncVoid = typeof(MagicDispatcherBase).GetMethod(nameof(ToObjectAsyncVoid), BindingFlags.Static | BindingFlags.NonPublic);
 
         private static T DeSerialize<T>(JToken token) => token.ToObject<T>(MagicProxySettings.Serializer);
         private static async Task<object> ToObjectAsync<TR>(Task<TR> task) => await task.ConfigureAwait(false);
         private static async Task<object> ToObjectAsyncVoid(Task task) { await task.ConfigureAwait(false); return 0; }
     }
 
-    internal class MagicDispatcher<TInterface> : MagicDispatcher, IMagicDispatcherRaw<TInterface>
+    internal class MagicDispatcher<TInterface> : MagicDispatcherBase, IMagicDispatcher<TInterface>
     {
+        protected static readonly string LambdaPrefix = $"{typeof(MagicDispatcherBase).FullName}<{typeof(TInterface).Name}>.SerializeLambda_";
+
         protected delegate Task<object> CompiledLambda(TInterface b, JArray j);
         protected class DispatcherMethodEntry : MethodEntry
         {
@@ -66,17 +43,16 @@ namespace Yoq.MagicProxy
             public Dictionary<string, CompiledLambda> GenericLambdas = new Dictionary<string, CompiledLambda>();
         }
 
-        protected readonly Dictionary<string, DispatcherMethodEntry> MethodCache;
+        protected readonly IReadOnlyDictionary<string, DispatcherMethodEntry> MethodCache;
 
         public MagicDispatcher()
         {
-            MethodCache = MagicProxyHelper.ReadInterfaceMethods<TInterface, DispatcherMethodEntry>(CacheBuilder);
-        }
-
-        private void CacheBuilder(DispatcherMethodEntry entry)
-        {
-            entry.NonGeneric = entry.MethodInfo.IsGenericMethod ? null : BuildLambda(entry.MethodInfo);
-            entry.GenericLambdas = new Dictionary<string, CompiledLambda>();
+            MethodCache = MagicProxyHelper.ReadInterfaceMethods<TInterface, DispatcherMethodEntry>();
+            foreach(var entry in MethodCache.Values)
+            {
+                entry.NonGeneric = entry.MethodInfo.IsGenericMethod ? null : BuildLambda(entry.MethodInfo);
+                entry.GenericLambdas = new Dictionary<string, CompiledLambda>();
+            }
         }
 
         private CompiledLambda BuildLambda(MethodInfo mi)
@@ -97,11 +73,11 @@ namespace Yoq.MagicProxy
                     backendCall);
 
             return Expression
-                .Lambda<CompiledLambda>(asyncToObjectCast, mi.Name, new[] { backendParam, argsParam })
+                .Lambda<CompiledLambda>(asyncToObjectCast, LambdaPrefix + mi.Name, new[] { backendParam, argsParam })
                 .Compile();
         }
 
-        async Task<(string, object)> IMagicDispatcherRaw<TInterface>.DoRequestRaw(TInterface impl, string method, JArray tArgs, JArray args)
+        async Task<(string, object)> IMagicDispatcher<TInterface>.ExecuteRequest(TInterface impl, string method, JArray tArgs, JArray args)
         {
             object result = 0;
             string error = null;
@@ -151,7 +127,7 @@ namespace Yoq.MagicProxy
             return type;
         }
 
-        byte[] IMagicDispatcherRaw<TInterface>.Serialize(object response)
+        byte[] IMagicDispatcher<TInterface>.SerializeResponse(object response)
             => response is byte[] raw
                 ? raw
                 : Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(response, MagicProxySettings.SerializerSettings));

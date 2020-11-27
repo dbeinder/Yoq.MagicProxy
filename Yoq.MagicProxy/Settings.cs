@@ -5,12 +5,6 @@ using Newtonsoft.Json;
 
 namespace Yoq.MagicProxy
 {
-    internal class MethodEntry
-    {
-        public MethodInfo MethodInfo;
-        public uint RequiredFlags;
-    }
-
     public static class MagicProxySettings
     {
         public static int MaxMessageSize = 20 * 1024 * 1024;
