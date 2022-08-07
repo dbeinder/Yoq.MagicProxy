@@ -33,10 +33,7 @@ namespace Yoq.MagicProxy
 
         public static async Task<(bool, uint, byte[], byte[])> ReadMessageAsync(this Stream stream, CancellationToken ct)
         {
-            var s = new Stopwatch();
-            s.Start();
             var (headerRead, header) = await stream.ReadChunkedAsync(16, ct).ConfigureAwait(false);
-            s.Stop();
             if (!headerRead) return (false, 0, null, null);
 
             var state = BitConverter.ToUInt32(header, 0);
@@ -52,8 +49,11 @@ namespace Yoq.MagicProxy
             if (!errRead) return (false, 0, null, null);
             var (datRead, datBuffer) = await stream.ReadChunkedAsync(datLen, ct).ConfigureAwait(false);
             if (!datRead) return (false, 0, null, null);
-            var (extRead, extBuffer) = await stream.ReadChunkedAsync(extLen, ct).ConfigureAwait(false);
-            if (!extRead) return (false, 0, null, null);
+            if (extLen != 0)
+            {
+                var (extRead, extBuffer) = await stream.ReadChunkedAsync(extLen, ct).ConfigureAwait(false);
+                if (!extRead) return (false, 0, null, null);
+            }
 
             return (true, state, errBuffer, datBuffer);
         }

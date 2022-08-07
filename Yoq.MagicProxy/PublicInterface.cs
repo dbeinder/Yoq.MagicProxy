@@ -8,11 +8,19 @@ namespace Yoq.MagicProxy
 {
     public interface IMagicInterfaceImpl<TConnectionState>
     {
-        /// <summary>return string to decline with message, or null to accept</summary>
+        /// <summary>Validate an incoming connection, return string to decline with message, or null to accept</summary>
         Task<string> ApproveConnection();
+
+        /// <summary>The TConnectionState flags enum, changes are pushed to the client with every call</summary>
         uint ConnectionStateUInt { get; }
+
+        /// <summary>The remote endpoint of the connected client</summary>
         EndPoint RemoteEndPoint { get; set; }
+
+        /// <summary>The certificate of the connected client</summary>
         X509Certificate2 ClientCertificate { get; set; }
+
+        /// <summary>Used only for logging by MagicProxy</summary>
         string ConnectionId { get; }
     }
 

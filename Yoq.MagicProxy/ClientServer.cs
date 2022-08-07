@@ -38,6 +38,11 @@ namespace Yoq.MagicProxy
         private CancellationTokenSource _cancelSource;
         private readonly IReadOnlyDictionary<string, MethodEntry> _methodTable;
 
+        /// <param name="serverCert">If null, MagicProxy uses a plaintext TCP connection</param>
+        /// <param name="clientCa">If null, the client certificate is not verified</param>
+        public MagicProxyServer(Func<TImpl> implFactory, IPEndPoint listenEndPoint, ILog log = null, X509Certificate2 serverCert = null, X509Certificate2 clientCa = null)
+         : this(implFactory, listenEndPoint, log, serverCert == null ? null : new[] { serverCert }, clientCa) { }
+
         /// <param name="serverCerts">If null, MagicProxy uses a plaintext TCP connection</param>
         /// <param name="clientCa">If null, the client certificate is not verified</param>
         public MagicProxyServer(Func<TImpl> implFactory, IPEndPoint listenEndPoint, ILog log = null, IEnumerable<X509Certificate2> serverCerts = null, X509Certificate2 clientCa = null)
@@ -76,7 +81,11 @@ namespace Yoq.MagicProxy
             _serverLoop = Task.Factory.StartNew(ServerLoop, TaskCreationOptions.LongRunning);
         }
 
-        public void StopServer() => _cancelSource?.Cancel();
+        public void StopServer()
+        {
+            _cancelSource?.Cancel();
+            _serverLoop?.Wait();
+        }
 
         private void ServerLoop()
         {
@@ -99,7 +108,7 @@ namespace Yoq.MagicProxy
                 switch (e)
                 {
                     case OperationCanceledException o:
-                    case System.IO.IOException x:
+                    case IOException x:
                         return;
                 }
                 _log.Error("ServerLoop Exception: " + e);

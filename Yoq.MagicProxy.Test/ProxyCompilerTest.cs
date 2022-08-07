@@ -23,7 +23,7 @@ namespace Yoq.MagicProxy.Test
             }
             catch (Exception e)
             {
-
+                Console.WriteLine(e);
             }
         }
     }
