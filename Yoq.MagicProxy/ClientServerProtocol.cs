@@ -51,7 +51,8 @@ namespace Yoq.MagicProxy
             if (!datRead) return (false, 0, null, null);
             if (extLen != 0)
             {
-                var (extRead, extBuffer) = await stream.ReadChunkedAsync(extLen, ct).ConfigureAwait(false);
+                // reserved for backwards compatible protocol extensions, currently always empty
+                var (extRead, _) = await stream.ReadChunkedAsync(extLen, ct).ConfigureAwait(false);
                 if (!extRead) return (false, 0, null, null);
             }
 

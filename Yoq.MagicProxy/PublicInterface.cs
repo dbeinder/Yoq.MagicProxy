@@ -6,13 +6,14 @@ using System.Threading.Tasks;
 
 namespace Yoq.MagicProxy
 {
-    public interface IMagicInterfaceImpl<TConnectionState>
+    public interface IMagicInterfaceImpl<TConnectionState> where TConnectionState : unmanaged, Enum
     {
         /// <summary>Validate an incoming connection, return string to decline with message, or null to accept</summary>
         Task<string> ApproveConnection();
 
-        /// <summary>The TConnectionState flags enum, changes are pushed to the client with every call</summary>
-        uint ConnectionStateUInt { get; }
+        /// <summary>The TConnectionState flags enum MUST be UInt32. Changes are pushed to the client with every call</summary>
+        TConnectionState ConnectionState { get; }
+        internal unsafe UInt32 ConnectionStateUInt { get { var val = ConnectionState; return *(uint*)(&val); } }
 
         /// <summary>The remote endpoint of the connected client</summary>
         EndPoint RemoteEndPoint { get; set; }

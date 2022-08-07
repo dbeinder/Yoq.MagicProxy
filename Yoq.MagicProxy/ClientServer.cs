@@ -22,6 +22,7 @@ namespace Yoq.MagicProxy
     public sealed class MagicProxyServer<TInterface, TImpl, TConnectionState>
         where TInterface : class
         where TImpl : class, TInterface, IMagicInterfaceImpl<TConnectionState>
+        where TConnectionState : unmanaged, Enum
     {
         public bool Logging = false;
         private readonly bool _useSsl;
@@ -47,6 +48,9 @@ namespace Yoq.MagicProxy
         /// <param name="clientCa">If null, the client certificate is not verified</param>
         public MagicProxyServer(Func<TImpl> implFactory, IPEndPoint listenEndPoint, ILog log = null, IEnumerable<X509Certificate2> serverCerts = null, X509Certificate2 clientCa = null)
         {
+            if (Enum.GetUnderlyingType(typeof(TConnectionState)) != typeof(UInt32))
+                throw new ArgumentException("TConnectionState must be UInt32");
+
             _methodTable = MagicProxyHelper.ReadInterfaceMethods<TInterface, MethodEntry>();
             _dispatcher = new MagicDispatcher<TInterface>();
             _implFactory = implFactory;
@@ -251,6 +255,7 @@ namespace Yoq.MagicProxy
 
     public abstract class MagicProxyClientBase<TInterface, TConnectionState> : IMagicProxyClient, IMagicConnection<TInterface, TConnectionState>
         where TInterface : class
+        where TConnectionState : unmanaged, Enum
     {
         private readonly SemaphoreSlim _sendQueueCounter = new SemaphoreSlim(0, Int32.MaxValue);
         private readonly SemaphoreSlim _sendLock = new SemaphoreSlim(1, 1);
@@ -276,7 +281,8 @@ namespace Yoq.MagicProxy
             protected set { _connected = value; InvokePropertyChanged(); }
         }
 
-        public TConnectionState ConnectionState => (TConnectionState)Enum.ToObject(typeof(TConnectionState), _connectionStateUint);
+        public unsafe TConnectionState ConnectionState { get { var val = _connectionStateUint; return *(TConnectionState*)(&val); } }
+
         private void ConnectionStateChanged() => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ConnectionState)));
 
         protected void HandleConnectionStateUpdate(uint newState)
@@ -345,6 +351,7 @@ namespace Yoq.MagicProxy
     public sealed class MagicProxyClient<TInterface, TConnectionState>
         : MagicProxyClientBase<TInterface, TConnectionState>
         where TInterface : class
+        where TConnectionState : unmanaged, Enum
     {
         private readonly bool _useSsl;
         private readonly int _port;
@@ -360,6 +367,9 @@ namespace Yoq.MagicProxy
         /// <param name="clientPrivCert">If null, the client does not authenticate using a client certificate</param>
         public MagicProxyClient(string hostname, int port, X509Certificate2 serverCaCert = null, X509Certificate2 clientPrivCert = null)
         {
+            if (Enum.GetUnderlyingType(typeof(TConnectionState)) != typeof(UInt32))
+                throw new ArgumentException("TConnectionState must be UInt32");
+
             _hostname = hostname;
             _port = port;
 

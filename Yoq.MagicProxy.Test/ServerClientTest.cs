@@ -14,17 +14,15 @@ namespace Yoq.MagicProxy.Test
     [TestClass]
     public class ServerClientTest
     {
-        private static int _port = 8085;
+        private static readonly int _port = 8085;
 
         private static byte[] ReadEmbedded(string filename)
         {
             var resourceName = typeof(ServerClientTest).Namespace + "." + filename;
-            using (var stream = typeof(ServerClientTest).Assembly.GetManifestResourceStream(resourceName))
-            using (var memStream = new MemoryStream())
-            {
-                stream.CopyTo(memStream);
-                return memStream.ToArray();
-            }
+            using var stream = typeof(ServerClientTest).Assembly.GetManifestResourceStream(resourceName);
+            using var memStream = new MemoryStream();
+            stream.CopyTo(memStream);
+            return memStream.ToArray();
         }
 
         [TestMethod]

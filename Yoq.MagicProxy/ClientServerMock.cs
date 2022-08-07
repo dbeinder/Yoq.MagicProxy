@@ -10,6 +10,7 @@ namespace Yoq.MagicProxy
 {
     public sealed class MagicProxyMockConnection<TInterface, TConnectionState>
         : MagicProxyClientBase<TInterface, TConnectionState>
+        where TConnectionState : unmanaged, Enum
         where TInterface : class
     {
         public TimeSpan RequestDelay = TimeSpan.Zero;

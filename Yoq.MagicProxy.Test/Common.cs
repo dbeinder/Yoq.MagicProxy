@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 namespace Yoq.MagicProxy.Test
 {
     [Flags]
-    public enum ConnectionFlags : uint
+    public enum ConnectionFlags : UInt32
     {
         None = 0,
         ClientVersionOk = 0x01,
@@ -45,15 +45,14 @@ namespace Yoq.MagicProxy.Test
 
     public class LolClass { public string Member = "FooBar"; }
     public class LolDerived : LolClass { public string AddlMember = "FFFXX"; }
-    
+
     public class FullBackendImpl : IBackend, IMagicInterfaceImpl<ConnectionFlags>
     {
-        protected ConnectionFlags ConnectionState = ConnectionFlags.None;
-        public uint ConnectionStateUInt => (uint)ConnectionState;
+        public ConnectionFlags ConnectionState { get; set; } = ConnectionFlags.None;
         public EndPoint RemoteEndPoint { get; set; }
         public X509Certificate2 ClientCertificate { get; set; }
 
-        private readonly object _lock = new object();
+        private readonly object _lock = new();
         public double Count = 0;
 
         public Task SimpleAction() => Task.CompletedTask;
@@ -111,8 +110,8 @@ namespace Yoq.MagicProxy.Test
             return Task.FromResult(error);
         }
 
-        public string ConnectionId => ClientCertificate?.Subject 
-                                      ?? RemoteEndPoint?.ToString() 
+        public string ConnectionId => ClientCertificate?.Subject
+                                      ?? RemoteEndPoint?.ToString()
                                       ?? "new connection";
 
         public Task Logout() => Task.FromResult(ConnectionFlags.None);
